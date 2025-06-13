@@ -15,7 +15,6 @@
     <script src="https://unpkg.com/jspdf-autotable"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
 </head>
 <body>
     <div id="loading-overlay" class="hidden">
@@ -24,133 +23,141 @@
     </div>
 
     <div id="toast-container"></div>
-    <main>
-        <form id="uploadForm" class="card">
-            <header class="card-header">
-                <i class="material-icons">assessment</i>
-                <h1>Dashboard de Vendas</h1>
-                <p>Junte relatórios e analise o portfólio completo ou projetos individuais.</p>
-            </header>
-            <section class="card-body">
+
+    <!-- Barra Lateral (Sidebar) -->
+    <aside class="sidebar">
+        <button id="sidebar-toggle" title="Recolher/Expandir Barra Lateral"><i class="material-icons">chevron_left</i></button>
+        
+        <div class="sidebar-header">
+            <i class="material-icons logo">assessment</i>
+            <h1>Análise de Vendas</h1>
+        </div>
+        
+        <form id="uploadForm">
+            <section id="uploadSection">
+                <h2>Controles</h2>
                 <div class="file-input-group">
-                    <label for="estoqueFile">1. Relatório de Estoque (Base)</label>
-                    <div class="input-wrapper">
-                        <button type="button" class="btn btn-select" onclick="document.getElementById('estoqueFile').click()">
-                            <i class="material-icons">upload_file</i> Selecionar arquivo
-                        </button>
-                        <span id="estoqueFileName" class="file-name">Nenhum arquivo</span>
-                    </div>
+                    <label for="estoqueFile"><i class="material-icons" style="font-size: 1rem;">source</i> Rel. de Estoque</label>
+                    <button type="button" class="file-select-button" onclick="document.getElementById('estoqueFile').click()">
+                        <span id="estoqueFileName">Selecionar arquivo</span>
+                    </button>
                     <input type="file" id="estoqueFile" name="estoqueFile" accept=".csv" hidden>
                 </div>
                 <div class="file-input-group">
-                    <label for="vendasFile">2. Relatório de Vendas (com Tipo de Venda)</label>
-                    <div class="input-wrapper">
-                        <button type="button" class="btn btn-select" onclick="document.getElementById('vendasFile').click()">
-                            <i class="material-icons">upload_file</i> Selecionar arquivo
-                        </button>
-                        <span id="vendasFileName" class="file-name">Nenhum arquivo</span>
-                    </div>
+                    <label for="vendasFile"><i class="material-icons" style="font-size: 1rem;">paid</i> Rel. de Vendas</label>
+                    <button type="button" class="file-select-button" onclick="document.getElementById('vendasFile').click()">
+                        <span id="vendasFileName">Selecionar arquivo</span>
+                    </button>
                     <input type="file" id="vendasFile" name="vendasFile" accept=".csv" hidden>
                 </div>
-            </section>
-            <footer class="card-footer">
-                <button type="submit" id="btnGerar" class="btn btn-generate" disabled>
-                    <span class="btn-text">Gerar Dashboard</span>
+                <button type="submit" id="btnGerar" class="btn-generate" disabled>
                     <div class="spinner" id="spinner" hidden></div>
+                    <span class="btn-text">Gerar Dashboard</span>
                 </button>
-            </footer>
+            </section>
         </form>
+
+        <nav class="sidebar-nav">
+            <a id="btnDownloadXlsx" class="nav-item">
+                <i class="material-icons">grid_on</i>
+                <span class="nav-text">Baixar Planilha (XLSX)</span>
+            </a>
+            <a id="btnDownloadPdf" class="nav-item">
+                <i class="material-icons">picture_as_pdf</i>
+                <span class="nav-text">Gerar Relatório (PDF)</span>
+            </a>
+            <div class="theme-switcher">
+                <input type="radio" id="light-theme" name="theme" checked>
+                <label for="light-theme" title="Tema Claro"><i class="material-icons">light_mode</i></label>
+                
+                <input type="radio" id="dark-theme" name="theme">
+                <label for="dark-theme" title="Tema Escuro"><i class="material-icons">dark_mode</i></label>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- Conteúdo Principal -->
+    <main>
+        <section id="dashboard-container" class="hidden">
+            <header class="dashboard-header">
+                <div id="custom-select-wrapper"></div>
+            </header>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-icon sold"><i class="material-icons">check_circle</i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Unidades Vendidas</span>
+                        <span class="kpi-value" id="kpi-vendidas">0</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon reserved"><i class="material-icons">schedule</i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Unidades Reservadas</span>
+                        <span class="kpi-value" id="kpi-reservadas">0</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon available"><i class="material-icons">store</i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Unidades Disponíveis</span>
+                        <span class="kpi-value" id="kpi-disponiveis">0</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon blocked"><i class="material-icons">lock</i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">Unidades Bloqueadas</span>
+                        <span class="kpi-value" id="kpi-bloqueadas">0</span>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon vgv"><i class="material-icons">monetization_on</i></div>
+                    <div class="kpi-content">
+                        <span class="kpi-label">VGV Realizado</span>
+                        <span class="kpi-value" id="kpi-vgv">R$ 0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="charts-section">
+                <div class="chart-card"><h3 class="chart-title" id="vendas-empreendimento-title">Tipos de Venda por Empreendimento</h3><div id="chart-vendas-empreendimento"></div></div>
+                <div class="chart-card"><h3 class="chart-title">Unidades por Tipologia</h3><div id="chart-unidades-tipologia"></div></div>
+                <div class="chart-card"><h3 class="chart-title">Vendas por Etapa</h3><div id="chart-vendas-etapa"></div></div>
+                <div class="chart-card"><h3 class="chart-title">Vendas por Mês</h3><div id="chart-vendas-mes"></div></div>
+            </div>
+            
+            <div class="table-container">
+                 <div class="table-header">
+                    <h3 class="chart-title">Análise Detalhada de Status</h3>
+                    <div class="group-by-container">
+                        <label for="analise-detalhada-filter">Agrupar por:</label>
+                        <select id="analise-detalhada-filter">
+                            <option value="empreendimento">Empreendimento</option>
+                            <option value="tipologia">Tipologia</option>
+                            <option value="etapa">Etapa</option>
+                            <option value="tipoVenda">Tipo de Venda</option>
+                        </select>
+                    </div>
+                 </div>
+                 <table id="analise-detalhada-table">
+                    <thead>
+                        <tr>
+                            <th id="analise-detalhada-header">Empreendimento</th>
+                            <th>Vendidas</th>
+                            <th>Reservadas</th>
+                            <th>Disponíveis</th>
+                            <th>Bloqueadas</th>
+                            <th>Outros</th>
+                            <th>Total</th>
+                            <th class="text-right">Preço Médio (Vendido)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analise-detalhada-body">
+                    </tbody>
+                 </table>
+            </div>
+        </section>
     </main>
-    
-    <section id="dashboard-container" class="hidden">
-        <header class="dashboard-header">
-            <div class="filter-container">
-                <i class="material-icons">business</i>
-                <select id="empreendimento-filter" class="filter-select"></select>
-            </div>
-            <div class="header-actions">
-                 <button id="btnDownloadXlsx" class="btn btn-select">
-                    <i class="material-icons">grid_on</i> Baixar Planilha (XLSX)
-                </button>
-                 <button id="btnDownloadPdf" class="btn btn-select">
-                    <i class="material-icons">picture_as_pdf</i> Gerar Relatório (PDF)
-                </button>
-            </div>
-        </header>
-        <div class="kpi-grid">
-            <div class="kpi-card">
-                <div class="kpi-content">
-                    <span class="kpi-label">Unidades Vendidas</span>
-                    <span class="kpi-value" id="kpi-vendidas">0</span>
-                </div>
-                <div class="kpi-icon sold"><i class="material-icons">check_circle</i></div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-content">
-                    <span class="kpi-label">Unidades Reservadas</span>
-                    <span class="kpi-value" id="kpi-reservadas">0</span>
-                </div>
-                <div class="kpi-icon reserved"><i class="material-icons">schedule</i></div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-content">
-                    <span class="kpi-label">Unidades Disponíveis</span>
-                    <span class="kpi-value" id="kpi-disponiveis">0</span>
-                </div>
-                <div class="kpi-icon available"><i class="material-icons">store</i></div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-content">
-                    <span class="kpi-label">Unidades Bloqueadas</span>
-                    <span class="kpi-value" id="kpi-bloqueadas">0</span>
-                </div>
-                <div class="kpi-icon blocked"><i class="material-icons">lock</i></div>
-            </div>
-            <div class="kpi-card">
-                <div class="kpi-content">
-                    <span class="kpi-label">VGV Realizado</span>
-                    <span class="kpi-value" id="kpi-vgv">R$ 0</span>
-                </div>
-                <div class="kpi-icon vgv"><i class="material-icons">monetization_on</i></div>
-            </div>
-        </div>
-        <div class="charts-section">
-            <div class="chart-card"><h3 class="chart-title" id="vendas-empreendimento-title">Tipos de Venda por Empreendimento</h3><div id="chart-vendas-empreendimento"></div></div>
-            <div class="chart-card"><h3 class="chart-title">Unidades por Tipologia</h3><div id="chart-unidades-tipologia"></div></div>
-            <div class="chart-card"><h3 class="chart-title">Vendas por Etapa</h3><div id="chart-vendas-etapa"></div></div>
-        </div>
-        
-        <div class="table-container">
-             <div class="table-header">
-                <h3 class="chart-title">Análise Detalhada de Status</h3>
-                <div class="group-by-container">
-                    <label for="analise-detalhada-filter">Agrupar por:</label>
-                    <select id="analise-detalhada-filter">
-                        <option value="empreendimento">Empreendimento</option>
-                        <option value="tipologia">Tipologia</option>
-                        <option value="etapa">Etapa</option>
-                        <option value="tipoVenda">Tipo de Venda</option>
-                    </select>
-                </div>
-             </div>
-             <table id="analise-detalhada-table">
-                <thead>
-                    <tr>
-                        <th id="analise-detalhada-header">Empreendimento</th>
-                        <th>Vendidas</th>
-                        <th>Reservadas</th>
-                        <th>Disponíveis</th>
-                        <th>Bloqueadas</th>
-                        <th>Outros</th>
-                        <th>Total</th>
-                        <th class="text-right">Preço Médio (Vendido)</th>
-                    </tr>
-                </thead>
-                <tbody id="analise-detalhada-body">
-                </tbody>
-             </table>
-        </div>
-    </section>
     
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>

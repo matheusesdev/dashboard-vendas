@@ -5,13 +5,13 @@ import pandas as pd
 import numpy as np
 from io import StringIO, BytesIO
 import traceback
+from datetime import datetime
 
 app = Flask(__name__)
 
-# --- A função processar_e_analisar permanece a mesma ---
+# --- A função processar_e_analisar permanece a mesma da última versão ---
 def processar_e_analisar(estoque_stream, vendas_stream):
     try:
-        # ... (código da função sem alterações) ...
         # --- 1. Carregamento e Verificação ---
         df_estoque = pd.read_csv(StringIO(estoque_stream.read().decode('utf-8-sig')), sep=';', skipfooter=1, engine='python')
         df_vendas = pd.read_csv(StringIO(vendas_stream.read().decode('utf-8-sig')), sep=';')
@@ -20,7 +20,7 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         df_vendas.columns = [str(col).strip() for col in df_vendas.columns]
         
         colunas_essenciais_estoque = ['Empreendimento', 'Unidade', 'Situação', 'Valor VGV', 'Tipologia', 'Etapa']
-        colunas_essenciais_vendas = ['Empreendimento', 'Unidade', 'Situação atual', 'Valor do contrato', 'Tipo de Venda']
+        colunas_essenciais_vendas = ['Empreendimento', 'Unidade', 'Situação atual', 'Valor do contrato', 'Tipo de Venda', 'Data Venda']
 
         for col in colunas_essenciais_estoque:
             if col not in df_estoque.columns: raise KeyError(f"'{col}' no arquivo de Estoque")
@@ -32,7 +32,7 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         # --- 2. Consolidação com Merge ---
         df_merged = pd.merge(
             df_estoque,
-            df_vendas[['Empreendimento', 'Unidade', 'Situação', 'Valor VGV', 'Tipo de Venda']],
+            df_vendas[['Empreendimento', 'Unidade', 'Situação', 'Valor VGV', 'Tipo de Venda', 'Data Venda']],
             on=['Empreendimento', 'Unidade'],
             how='left',
             suffixes=('_Estoque', '_Venda')
@@ -50,6 +50,7 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         df_final['UNIDADE'] = df_merged['Unidade']
         df_final['VALOR PV'] = df_merged['Valor VGV_Estoque']
         df_final['VALOR DO CONTRATO'] = df_merged['Valor VGV_Venda'].fillna(df_merged['Valor VGV_Estoque'])
+        df_final['DATA DA VENDA'] = df_merged.get('Data Venda')
 
         # --- 4. Limpeza e Formatação ---
         for col in ['VALOR PV', 'VALOR DO CONTRATO']:
@@ -62,7 +63,8 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         
         colunas_relatorio = [
             'BLOCO', 'EMPREENDIMENTO', 'ETAPA', 'SITUAÇÃO', 
-            'TIPO DE VENDA', 'TIPOLOGIA', 'UNIDADE', 'VALOR PV', 'VALOR DO CONTRATO'
+            'TIPO DE VENDA', 'TIPOLOGIA', 'UNIDADE', 'VALOR PV', 'VALOR DO CONTRATO',
+            'DATA DA VENDA'
         ]
         
         for col in colunas_relatorio:
@@ -77,13 +79,16 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         data_for_js = df_final.copy()
         data_for_js.columns = [
             'bloco', 'empreendimento', 'etapa', 'situacao', 'tipoVenda', 
-            'tipologia', 'unidade', 'valorPV', 'valorContrato'
+            'tipologia', 'unidade', 'valorPV', 'valorContrato', 'dataVenda'
         ]
 
         return {
             'empreendimentos': empreendimentos_unicos,
             'table_data': data_for_js.to_dict('records')
         }
+    except KeyError as ke:
+        traceback.print_exc()
+        return {"error": f"Coluna essencial não encontrada: {ke}. Verifique os arquivos CSV."}
     except Exception as e:
         traceback.print_exc()
         return {"error": f"Erro inesperado no servidor: {type(e).__name__}."}
@@ -95,7 +100,6 @@ def index():
 
 @app.route('/processar', methods=['POST'])
 def processar():
-    # ... (código da rota sem alterações) ...
     if 'estoqueFile' not in request.files or 'vendasFile' not in request.files:
         return jsonify({"error": "Arquivos não encontrados."}), 400
     resultado = processar_e_analisar(request.files['estoqueFile'].stream, request.files['vendasFile'].stream)
@@ -103,7 +107,6 @@ def processar():
         return jsonify(resultado), 500
     return jsonify(resultado)
 
-# --- ROTA DE DOWNLOAD ATUALIZADA COM TABELAS DINÂMICAS ---
 @app.route('/download-xlsx', methods=['POST'])
 def download_xlsx():
     try:
@@ -116,56 +119,129 @@ def download_xlsx():
         df.rename(columns={
             'bloco': 'BLOCO', 'empreendimento': 'EMPREENDIMENTO', 'etapa': 'ETAPA', 
             'situacao': 'SITUAÇÃO', 'tipoVenda': 'TIPO DE VENDA', 'tipologia': 'TIPOLOGIA', 
-            'unidade': 'UNIDADE', 'valorPV': 'VALOR PV', 'valorContrato': 'VALOR DO CONTRATO'
+            'unidade': 'UNIDADE', 'valorPV': 'VALOR PV', 'valorContrato': 'VALOR DO CONTRATO',
+            'dataVenda': 'DATA DA VENDA'
         }, inplace=True)
         
-        # Garante que a coluna de contagem exista para as tabelas dinâmicas
         df['CONTADOR'] = 1
+        df_vendas_only = df[df['SITUAÇÃO'].isin(['VENDIDA', 'VENDIDO'])].copy()
+        df_vendas_only['DATA DA VENDA'] = pd.to_datetime(df_vendas_only['DATA DA VENDA'], dayfirst=True, errors='coerce')
+        df_vendas_only.dropna(subset=['DATA DA VENDA'], inplace=True)
+        
+        meses = {1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho', 7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro'}
+        df_vendas_only['MÊS_ANO_NUM'] = df_vendas_only['DATA DA VENDA'].dt.to_period('M')
+        df_vendas_only['MÊS_ANO'] = df_vendas_only['DATA DA VENDA'].dt.month.map(meses) + " de " + df_vendas_only['DATA DA VENDA'].dt.year.astype(str)
+        df_vendas_only = df_vendas_only.sort_values('MÊS_ANO_NUM')
+
 
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            # --- Aba 1: Dados Brutos ---
-            df.drop(columns=['CONTADOR']).to_excel(writer, index=False, sheet_name='Dados Consolidados')
             workbook = writer.book
-            worksheet1 = writer.sheets['Dados Consolidados']
-            header_format = workbook.add_format({'bold': True, 'text_wrap': True, 'valign': 'top', 'fg_color': '#D7E4BC', 'border': 1, 'align': 'center'})
-            currency_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
-            for col_num, value in enumerate(df.drop(columns=['CONTADOR']).columns.values):
-                worksheet1.write(0, col_num, value, header_format)
-            for idx, col in enumerate(df.drop(columns=['CONTADOR'])):
-                max_len = max((df[col].astype(str).map(len).max(), len(str(df[col].name)))) + 3
-                if max_len > 50: max_len = 50
-                worksheet1.set_column(idx, idx, max_len)
-                if 'VALOR' in col:
-                    worksheet1.set_column(idx, idx, max_len, currency_format)
-
-            # --- Aba 2: Tabelas Dinâmicas ---
-            worksheet2 = workbook.add_worksheet('Tabelas Dinâmicas')
-            bold_format = workbook.add_format({'bold': True})
-
-            # Tabela Dinâmica 1: Status por Empreendimento
-            worksheet2.write('A1', 'Status por Empreendimento', bold_format)
-            pivot_table_1 = df.pivot_table(index='EMPREENDIMENTO', columns='SITUAÇÃO', values='CONTADOR', aggfunc='sum', fill_value=0)
-            pivot_table_1.to_excel(writer, sheet_name='Tabelas Dinâmicas', startrow=2, startcol=0)
-
-            # Tabela Dinâmica 2: Status por Tipologia
-            start_row_2 = len(pivot_table_1) + 6
-            worksheet2.write(f'A{start_row_2}', 'Status por Tipologia', bold_format)
-            pivot_table_2 = df.pivot_table(index='TIPOLOGIA', columns='SITUAÇÃO', values='CONTADOR', aggfunc='sum', fill_value=0)
-            pivot_table_2.to_excel(writer, sheet_name='Tabelas Dinâmicas', startrow=start_row_2 + 1, startcol=0)
             
-            # Tabela Dinâmica 3: VGV Realizado por Empreendimento e Situação
-            start_row_3 = start_row_2 + len(pivot_table_2) + 6
-            worksheet2.write(f'A{start_row_3}', 'VGV por Empreendimento e Situação', bold_format)
-            pivot_table_3 = df.pivot_table(index='EMPREENDIMENTO', columns='SITUAÇÃO', values='VALOR DO CONTRATO', aggfunc='sum', fill_value=0)
-            pivot_table_3.to_excel(writer, sheet_name='Tabelas Dinâmicas', startrow=start_row_3 + 1, startcol=0)
+            title_format = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#4F46E5', 'valign': 'vcenter'})
+            subtitle_format = workbook.add_format({'bold': True, 'font_size': 11, 'font_color': '#1a202c', 'align': 'left', 'valign': 'vcenter'})
+            header_format = workbook.add_format({'bold': True, 'bg_color': '#4F46E5', 'font_color': 'white', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
+            currency_format = workbook.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
+            number_format = workbook.add_format({'num_format': '#,##0', 'border': 1})
+            index_format = workbook.add_format({'bold': True, 'border': 1, 'align': 'left'})
+            total_format_num = workbook.add_format({'bold': True, 'bg_color': '#f0f2f5', 'num_format': '#,##0', 'border': 1})
+            total_format_curr = workbook.add_format({'bold': True, 'bg_color': '#f0f2f5', 'num_format': 'R$ #,##0.00', 'border': 1})
+            
+            # --- Aba 1: Dashboard Resumo ---
+            sheet_dashboard = workbook.add_worksheet('Dashboard Resumo')
+            sheet_dashboard.hide_gridlines(2)
+
+            sheet_dashboard.set_row(0, 30)
+            sheet_dashboard.write('B1', 'Relatório Analítico de Vendas', title_format)
+            sheet_dashboard.write('B2', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", workbook.add_format({'color': '#718096'}))
+            
+            pivot_vendas_mes = df_vendas_only.pivot_table(index='MÊS_ANO', values='CONTADOR', aggfunc='sum', fill_value=0)
+            pivot_vendas_mes = pivot_vendas_mes.reindex(df_vendas_only['MÊS_ANO'].unique())
+            pivot_vendas_mes.index.name = 'Mês/Ano'
+            pivot_vendas_mes.columns = ['Vendas']
+
+            sheet_dashboard.write('B5', 'Evolução Mensal de Vendas', subtitle_format)
+            pivot_vendas_mes.to_excel(writer, sheet_name='Dashboard Resumo', startrow=6, startcol=1, header=False)
+            
+            sheet_dashboard.set_column('B:B', 20)
+            sheet_dashboard.set_column('C:C', 15)
+            sheet_dashboard.write('B7', pivot_vendas_mes.index.name, header_format)
+            sheet_dashboard.write('C7', pivot_vendas_mes.columns[0], header_format)
+            for row_num, (index, row) in enumerate(pivot_vendas_mes.iterrows()):
+                 sheet_dashboard.write(7 + row_num, 1, index, index_format)
+                 sheet_dashboard.write(7 + row_num, 2, row['Vendas'], number_format)
+
+            chart = workbook.add_chart({'type': 'column'})
+            num_rows = len(pivot_vendas_mes)
+            chart.add_series({
+                'name':       ['Dashboard Resumo', 6, 2],
+                'categories': ['Dashboard Resumo', 7, 1, 6 + num_rows, 1],
+                'values':     ['Dashboard Resumo', 7, 2, 6 + num_rows, 2],
+            })
+            chart.set_title({'name': 'Vendas por Mês'})
+            chart.set_legend({'position': 'none'})
+            chart.set_x_axis({'name': 'Mês'})
+            chart.set_y_axis({'name': 'Quantidade de Vendas', 'major_gridlines': {'visible': False}})
+            chart.set_plotarea({'border': {'none': True}})
+            sheet_dashboard.insert_chart('E5', chart, {'x_scale': 1.5, 'y_scale': 1.2})
+            
+            # --- Aba 2: Tabelas Dinâmicas Detalhadas ---
+            sheet_pivots = workbook.add_worksheet('Tabelas Dinâmicas')
+            current_row = 1
+
+            # --- CORRIGIDO: Função auxiliar agora usa `header=False` ---
+            def write_and_format_pivot(df_pivot, title, start_row, format_func):
+                sheet_pivots.merge_range(start_row, 0, start_row, len(df_pivot.columns), title, subtitle_format)
+                df_pivot.to_excel(writer, sheet_name='Tabelas Dinâmicas', startrow=start_row + 2, header=False)
+                
+                for c_idx, value in enumerate(df_pivot.columns.values):
+                    sheet_pivots.write(start_row + 2, c_idx + 1, value, header_format)
+                sheet_pivots.write(start_row + 2, 0, df_pivot.index.name, header_format)
+                
+                for r_idx, index_name in enumerate(df_pivot.index):
+                    # Formatação da linha de índice
+                    sheet_pivots.write(start_row + 3 + r_idx, 0, index_name, index_format)
+                    # Formatação das células de dados
+                    for c_idx, _ in enumerate(df_pivot.columns):
+                        is_total_row = (index_name == 'Total Geral')
+                        cell_format = format_func(is_total_row)
+                        sheet_pivots.write(start_row + 3 + r_idx, c_idx + 1, df_pivot.iloc[r_idx, c_idx], cell_format)
+                return start_row + len(df_pivot) + 5
+            
+            pivot_table_1 = df.pivot_table(index='EMPREENDIMENTO', columns='SITUAÇÃO', values='CONTADOR', aggfunc='sum', fill_value=0, margins=True, margins_name='Total Geral')
+            current_row = write_and_format_pivot(pivot_table_1, 'Status por Empreendimento', current_row, lambda is_total: total_format_num if is_total else number_format)
+            
+            pivot_table_2 = df.pivot_table(index='TIPOLOGIA', columns='SITUAÇÃO', values='CONTADOR', aggfunc='sum', fill_value=0, margins=True, margins_name='Total Geral')
+            current_row = write_and_format_pivot(pivot_table_2, 'Status por Tipologia', current_row, lambda is_total: total_format_num if is_total else number_format)
+            
+            pivot_table_3 = df.pivot_table(index='EMPREENDIMENTO', columns='SITUAÇÃO', values='VALOR DO CONTRATO', aggfunc='sum', fill_value=0, margins=True, margins_name='Total Geral')
+            current_row = write_and_format_pivot(pivot_table_3, 'VGV por Empreendimento e Situação', current_row, lambda is_total: total_format_curr if is_total else currency_format)
+            
+            sheet_pivots.set_column('A:A', 45)
+            sheet_pivots.set_column('B:Z', 18)
+
+            # --- Aba 3: Dados Consolidados ---
+            df_final = df.drop(columns=['CONTADOR', 'MÊS_ANO', 'MÊS_ANO_NUM'], errors='ignore')
+            df_final.to_excel(writer, index=False, sheet_name='Dados Consolidados')
+            worksheet_data = writer.sheets['Dados Consolidados']
+            for col_num, value in enumerate(df_final.columns.values):
+                worksheet_data.write(0, col_num, value, header_format)
+            
+            for idx, col in enumerate(df_final):
+                series = df_final[col]
+                max_len = max((series.astype(str).map(len).max(), len(str(series.name)))) + 2
+                max_len = min(max_len, 50)
+                if 'VALOR' in col:
+                    worksheet_data.set_column(idx, idx, 18, currency_format)
+                else:
+                    worksheet_data.set_column(idx, idx, max_len)
 
         output.seek(0)
         return send_file(
             output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name='relatorio_analitico.xlsx'
+            download_name='relatorio_analitico_detalhado.xlsx'
         )
 
     except Exception as e:

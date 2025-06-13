@@ -5,13 +5,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let fullData = [];
     let filteredData = [];
     let charts = {};
+    let currentTheme = localStorage.getItem('theme') || 'light';
 
     // --- Seleção de Elementos da UI ---
+    const body = document.body;
     const form = document.getElementById('uploadForm');
     const btnGerar = document.getElementById('btnGerar');
     const spinner = document.getElementById('spinner');
     const dashboardContainer = document.getElementById('dashboard-container');
-    const filterSelect = document.getElementById('empreendimento-filter');
+    const customSelectWrapper = document.getElementById('custom-select-wrapper');
     const btnDownloadXlsx = document.getElementById('btnDownloadXlsx');
     const btnDownloadPdf = document.getElementById('btnDownloadPdf');
     const loadingOverlay = document.getElementById('loading-overlay');
@@ -20,18 +22,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const estoqueFileName = document.getElementById('estoqueFileName');
     const vendasFileName = document.getElementById('vendasFileName');
     const analiseDetalhadaFilter = document.getElementById('analise-detalhada-filter');
-    
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const lightThemeToggle = document.getElementById('light-theme');
+    const darkThemeToggle = document.getElementById('dark-theme');
+
     // --- Funções Utilitárias ---
     const checkFormState = () => btnGerar.disabled = !(estoqueFileInput.files.length > 0 && vendasFileInput.files.length > 0);
     
-    const updateFileDisplay = (input, nameDisplay) => {
+    const updateFileDisplay = (input, buttonDisplay) => {
         const file = input.files[0];
         const group = input.closest('.file-input-group');
         if (file) {
-            nameDisplay.textContent = file.name;
+            buttonDisplay.textContent = file.name;
             group.classList.add('filled');
         } else {
-            nameDisplay.textContent = "Nenhum arquivo";
+            buttonDisplay.textContent = "Selecionar arquivo";
             group.classList.remove('filled');
         }
         checkFormState();
@@ -53,22 +58,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const showChartMessage = (chartSelector, message) => {
         const el = document.querySelector(chartSelector);
-        el.innerHTML = `<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">${message}</p>`;
+        if (el) el.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; height:100%; color: var(--text-secondary); padding: 2rem;">${message}</div>`;
+    };
+
+    const animateValue = (element, start, end, duration) => {
+        let startTimestamp = null;
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            element.innerText = Math.floor(progress * (end - start) + start).toLocaleString('pt-BR');
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
+            }
+        };
+        window.requestAnimationFrame(step);
     };
     
     const getBaseChartOptions = () => ({
-        theme: { mode: 'light' },
+        theme: { mode: currentTheme },
         chart: {
             fontFamily: 'Inter, sans-serif',
-            foreColor: '#6c757d',
-            toolbar: { show: false }
+            foreColor: 'var(--text-secondary)',
+            background: 'transparent',
+            toolbar: { show: true, tools: { download: '<i class="material-icons" style="color:var(--text-secondary)">vertical_align_bottom</i>' } }
         },
-        grid: { borderColor: '#e9ecef', strokeDashArray: 3 },
-        tooltip: { theme: 'light' },
+        grid: { borderColor: 'var(--border-color)', strokeDashArray: 3 },
+        tooltip: { theme: currentTheme },
         dataLabels: { enabled: false },
-        legend: { fontWeight: 500, labels: { colors: '#212529' } },
-        xaxis: { labels: { style: { fontWeight: 500 } } }
+        legend: { fontWeight: 500, labels: { colors: 'var(--text-primary)' } },
+        xaxis: { labels: { style: { colors: 'var(--text-secondary)', fontWeight: 500 } } },
+        yaxis: { labels: { style: { colors: 'var(--text-secondary)' } } }
     });
+    
+    // --- Lógica do Dropdown Customizado ---
+    const createCustomDropdown = (originalSelect) => {
+        originalSelect.style.display = 'none';
+
+        const container = document.createElement('div');
+        container.className = 'custom-select-container';
+
+        const trigger = document.createElement('div');
+        trigger.className = 'custom-select-trigger';
+        trigger.textContent = originalSelect.options[originalSelect.selectedIndex].textContent;
+        container.appendChild(trigger);
+        
+        const options = document.createElement('div');
+        options.className = 'custom-options';
+
+        Array.from(originalSelect.options).forEach(optionEl => {
+            const customOption = document.createElement('div');
+            customOption.className = 'custom-option';
+            customOption.textContent = optionEl.textContent;
+            customOption.dataset.value = optionEl.value;
+
+            if (optionEl.selected) {
+                customOption.classList.add('selected');
+            }
+
+            customOption.addEventListener('click', () => {
+                options.querySelector('.selected')?.classList.remove('selected');
+                customOption.classList.add('selected');
+                trigger.textContent = customOption.textContent;
+                container.classList.remove('open');
+                if (originalSelect.value !== customOption.dataset.value) {
+                    originalSelect.value = customOption.dataset.value;
+                    originalSelect.dispatchEvent(new Event('change'));
+                }
+            });
+
+            options.appendChild(customOption);
+        });
+
+        container.appendChild(options);
+        customSelectWrapper.innerHTML = '';
+        customSelectWrapper.appendChild(container);
+
+        trigger.addEventListener('click', () => {
+            container.classList.toggle('open');
+        });
+
+        window.addEventListener('click', (e) => {
+            if (!container.contains(e.target)) {
+                container.classList.remove('open');
+            }
+        });
+    };
 
     // --- Lógica de Renderização ---
     const renderDashboard = (data) => {
@@ -78,61 +152,74 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector("#chart-vendas-empreendimento").innerHTML = '';
         document.querySelector("#chart-unidades-tipologia").innerHTML = '';
         document.querySelector("#chart-vendas-etapa").innerHTML = '';
+        document.querySelector("#chart-vendas-mes").innerHTML = '';
         document.querySelector("#analise-detalhada-body").innerHTML = '';
         
-        if (!data || data.length === 0) { showToast("Nenhum dado para exibir para este filtro.", "error"); return; }
+        if (!data || data.length === 0) {
+            showToast("Nenhum dado para exibir para este filtro.", "error");
+            renderKPIs([]);
+            return;
+        }
         filteredData = data;
         
         renderKPIs(data);
         renderVendasChart(data);
         renderTipologiaChart(data);
         renderVendasPorEtapaChart(data);
+        renderVendasPorMesChart(data);
         renderAnaliseDetalhadaTable(data);
     };
 
     const renderKPIs = (data) => {
         const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
-        const statusCounts = data.reduce((acc, d) => {
-            const situacao = (d.situacao || 'INDEFINIDO').toUpperCase().trim();
-            acc[situacao] = (acc[situacao] || 0) + 1;
-            return acc;
-        }, {});
-        const vendidasCount = SITUACAO_VENDIDO.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
-        const vgvTotal = data
-            .filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase().trim()))
-            .reduce((sum, d) => sum + (d.valorContrato || 0), 0);
+        let statusCounts = {}, vendidasCount = 0, vgvTotal = 0;
+
+        if (data.length > 0) {
+            statusCounts = data.reduce((acc, d) => {
+                const situacao = (d.situacao || 'INDEFINIDO').toUpperCase().trim();
+                acc[situacao] = (acc[situacao] || 0) + 1;
+                return acc;
+            }, {});
+            vendidasCount = SITUACAO_VENDIDO.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
+            vgvTotal = data
+                .filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase().trim()))
+                .reduce((sum, d) => sum + (d.valorContrato || 0), 0);
+        }
+
+        animateValue(document.getElementById('kpi-vendidas'), 0, vendidasCount, 1000);
+        animateValue(document.getElementById('kpi-reservadas'), 0, statusCounts['RESERVADA'] || 0, 1000);
+        animateValue(document.getElementById('kpi-disponiveis'), 0, statusCounts['DISPONÍVEL'] || statusCounts['DISPONIVEL'] || 0, 1000);
+        animateValue(document.getElementById('kpi-bloqueadas'), 0, statusCounts['BLOQUEADA'] || statusCounts['BLOQUEADO'] || 0, 1000);
         
-        document.getElementById('kpi-vendidas').textContent = vendidasCount;
-        document.getElementById('kpi-reservadas').textContent = statusCounts['RESERVADA'] || 0;
-        document.getElementById('kpi-disponiveis').textContent = statusCounts['DISPONÍVEL'] || statusCounts['DISPONIVEL'] || 0;
-        document.getElementById('kpi-bloqueadas').textContent = statusCounts['BLOQUEADA'] || statusCounts['BLOQUEADO'] || 0;
-        document.getElementById('kpi-vgv').textContent = formatCurrency(vgvTotal);
+        const vgvEl = document.getElementById('kpi-vgv');
+        const startVGV = parseFloat(vgvEl.innerText.replace(/[^0-9,-]+/g,"").replace(",", ".")) || 0;
+        animateValue(vgvEl, startVGV, vgvTotal, 1000);
+        setTimeout(() => { vgvEl.textContent = formatCurrency(vgvTotal); }, 1000);
     };
     
     const renderVendasChart = (data) => {
         const container = "#chart-vendas-empreendimento";
         const titleElement = document.getElementById('vendas-empreendimento-title');
-        const filterValue = filterSelect.value;
+        const filterValue = document.querySelector('.custom-select-trigger').textContent;
         const baseOptions = getBaseChartOptions();
         try {
             const vendasData = data.filter(d => ['VENDIDO', 'VENDIDA'].includes((d.situacao || '').toUpperCase()) && d.tipoVenda);
-            if (vendasData.length === 0) { showChartMessage(container, "Sem dados de 'Tipo de Venda' para este filtro."); return; }
-            if (filterValue === 'todos') {
+            if (vendasData.length === 0) { showChartMessage(container, "Sem dados de 'Tipo de Venda'."); return; }
+            if (filterValue === 'Todos os Empreendimentos') {
                 titleElement.textContent = 'Tipos de Venda por Empreendimento';
                 const grouped = vendasData.reduce((acc, d) => { acc[d.empreendimento] = acc[d.empreendimento] || {}; acc[d.empreendimento][d.tipoVenda] = (acc[d.empreendimento][d.tipoVenda] || 0) + 1; return acc; }, {});
                 const empreendimentos = Object.keys(grouped);
                 const tiposDeVenda = [...new Set(vendasData.map(d => d.tipoVenda))];
                 const series = tiposDeVenda.map(tipo => ({ name: tipo, data: empreendimentos.map(emp => grouped[emp][tipo] || 0) }));
-                charts.vendas = new ApexCharts(document.querySelector(container), { ...baseOptions, series, chart: { ...baseOptions.chart, type: 'bar', height: 350, stacked: true }, plotOptions: { bar: { horizontal: true } }, xaxis: { categories: empreendimentos }, legend: { ...baseOptions.legend, position: 'top' } });
-                charts.vendas.render();
+                charts.vendas = new ApexCharts(document.querySelector(container), { ...baseOptions, series, chart: { ...baseOptions.chart, type: 'bar', height: 350, stacked: true }, plotOptions: { bar: { horizontal: true } }, xaxis: { categories: empreendimentos, ...baseOptions.xaxis }, legend: { ...baseOptions.legend, position: 'top' } });
             } else {
                 titleElement.textContent = `Tipos de Venda para ${filterValue}`;
                 const groupedByTipo = vendasData.reduce((acc, d) => { acc[d.tipoVenda] = (acc[d.tipoVenda] || 0) + 1; return acc; }, {});
                 const labels = Object.keys(groupedByTipo);
                 const series = Object.values(groupedByTipo);
                 charts.vendas = new ApexCharts(document.querySelector(container), { ...baseOptions, series, labels, chart: { ...baseOptions.chart, type: 'donut', height: 350 }, legend: { ...baseOptions.legend, position: 'bottom' } });
-                charts.vendas.render();
             }
+            charts.vendas.render();
         } catch (err) { console.error("Erro no gráfico de vendas:", err); showChartMessage(container, "Erro ao processar dados."); }
     };
     
@@ -141,10 +228,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const baseOptions = getBaseChartOptions();
         try {
             const tipologiaData = data.filter(d => d.tipologia);
-            if (tipologiaData.length === 0) { showChartMessage(container, "Sem dados de 'Tipologia' para este filtro."); return; }
+            if (tipologiaData.length === 0) { showChartMessage(container, "Sem dados de 'Tipologia'."); return; }
             const grouped = tipologiaData.reduce((acc, d) => { acc[d.tipologia] = (acc[d.tipologia] || 0) + 1; return acc; }, {});
             const sorted = Object.entries(grouped).sort((a,b) => b[1] - a[1]);
-            charts.tipologia = new ApexCharts(document.querySelector(container), { ...baseOptions, series: [{ name: 'Unidades', data: sorted.map(d => d[1]) }], chart: { ...baseOptions.chart, type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: false, distributed: true, columnWidth: '60%' } }, xaxis: { categories: sorted.map(d => d[0]) }, legend: { show: false } });
+            charts.tipologia = new ApexCharts(document.querySelector(container), { ...baseOptions, series: [{ name: 'Unidades', data: sorted.map(d => d[1]) }], chart: { ...baseOptions.chart, type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: false, distributed: true, columnWidth: '60%' } }, xaxis: { categories: sorted.map(d => d[0]), ...baseOptions.xaxis }, legend: { show: false } });
             charts.tipologia.render();
         } catch (err) { console.error("Erro no gráfico de tipologia:", err); showChartMessage(container, "Erro ao processar dados."); }
     };
@@ -155,14 +242,43 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
             const vendasData = data.filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase()) && d.etapa);
-            if (vendasData.length === 0) { showChartMessage(container, "Sem dados de vendas por etapa para este filtro."); return; }
+            if (vendasData.length === 0) { showChartMessage(container, "Sem dados de vendas por etapa."); return; }
             const grouped = vendasData.reduce((acc, d) => { acc[d.etapa] = (acc[d.etapa] || 0) + 1; return acc; }, {});
             const sorted = Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
-            charts.vendasEtapa = new ApexCharts(document.querySelector(container), { ...baseOptions, series: [{ name: 'Vendas', data: sorted.map(d => d[1]) }], chart: { ...baseOptions.chart, type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: false, columnWidth: '50%', distributed: true } }, xaxis: { categories: sorted.map(d => d[0]) }, legend: { show: false } });
+            charts.vendasEtapa = new ApexCharts(document.querySelector(container), { ...baseOptions, series: [{ name: 'Vendas', data: sorted.map(d => d[1]) }], chart: { ...baseOptions.chart, type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: false, columnWidth: '50%', distributed: true } }, xaxis: { categories: sorted.map(d => d[0]), ...baseOptions.xaxis }, legend: { show: false } });
             charts.vendasEtapa.render();
         } catch (err) { console.error("Erro no gráfico de etapa:", err); showChartMessage(container, "Erro ao processar dados."); }
     };
+    
+    const renderVendasPorMesChart = (data) => {
+        const container = "#chart-vendas-mes";
+        const baseOptions = getBaseChartOptions();
+        try {
+            const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
+            const vendasData = data.filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase().trim()) && d.dataVenda);
+            if (vendasData.length === 0) { showChartMessage(container, "Nenhuma data de venda encontrada."); return; }
+            const monthlyCounts = vendasData.reduce((acc, item) => {
+                try {
+                    const parts = item.dataVenda.split('/');
+                    if (parts.length === 3) {
+                        const month = parts[1].padStart(2, '0');
+                        const year = parts[2];
+                        const key = `${year}-${month}`;
+                        acc[key] = (acc[key] || 0) + 1;
+                    }
+                } catch (e) { console.warn("Formato de data inválido:", item.dataVenda); }
+                return acc;
+            }, {});
 
+            const sortedKeys = Object.keys(monthlyCounts).sort();
+            const seriesData = sortedKeys.map(key => monthlyCounts[key]);
+            const categories = sortedKeys.map(key => { const [year, month] = key.split('-'); return `${month}/${year}`; });
+
+            charts.vendasMes = new ApexCharts(document.querySelector(container), { ...baseOptions, series: [{ name: 'Vendas', data: seriesData }], chart: { ...baseOptions.chart, type: 'area', height: 350, }, colors: [baseOptions.theme.mode === 'dark' ? '#6366f1' : '#4f46e5'], xaxis: { categories: categories, ...baseOptions.xaxis, tickAmount: 10 }, stroke: { curve: 'smooth', width: 3 }, markers: { size: 5 }, legend: { show: false } });
+            charts.vendasMes.render();
+        } catch (err) { console.error("Erro no gráfico de vendas por mês:", err); showChartMessage(container, "Erro ao processar dados."); }
+    };
+    
     const renderAnaliseDetalhadaTable = (data) => {
         const tableBody = document.getElementById('analise-detalhada-body');
         const headerCell = document.getElementById('analise-detalhada-header');
@@ -190,6 +306,31 @@ document.addEventListener('DOMContentLoaded', () => {
             tableBody.innerHTML = analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td>${row.total}</td><td class="text-right">${row.precoMedio > 0 ? formatCurrency(row.precoMedio) : '-'}</td></tr>`).join('');
         } catch (err) { console.error("Erro na tabela detalhada:", err); tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Erro ao processar dados.</td></tr>'; }
     };
+    
+    // --- Lógica de Interação da UI ---
+    
+    const setTheme = (theme) => {
+        currentTheme = theme;
+        localStorage.setItem('theme', theme);
+        if (theme === 'dark') {
+            body.classList.add('dark-mode');
+            darkThemeToggle.checked = true;
+        } else {
+            body.classList.remove('dark-mode');
+            lightThemeToggle.checked = true;
+        }
+        Object.values(charts).forEach(chart => {
+            if(chart) chart.updateOptions({ theme: { mode: theme } });
+        });
+    };
+
+    lightThemeToggle.addEventListener('change', () => setTheme('light'));
+    darkThemeToggle.addEventListener('change', () => setTheme('dark'));
+    setTheme(currentTheme);
+
+    sidebarToggle.addEventListener('click', () => {
+        body.classList.toggle('sidebar-collapsed');
+    });
 
     // --- Lógica de Eventos ---
     form.addEventListener('submit', async e => {
@@ -203,24 +344,31 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error(data.error || "Erro desconhecido no servidor.");
             fullData = data.table_data;
             if (!fullData || fullData.length === 0) throw new Error("Os arquivos processados não retornaram dados válidos.");
-            filterSelect.innerHTML = '<option value="todos">Todos os Empreendimentos</option>';
+            
+            const originalSelect = document.createElement('select');
+            originalSelect.id = 'empreendimento-filter';
+            originalSelect.innerHTML = '<option value="todos">Todos os Empreendimentos</option>';
             data.empreendimentos.forEach(emp => {
                 const option = document.createElement('option');
-                option.value = emp; option.textContent = emp;
-                filterSelect.appendChild(option);
+                option.value = emp;
+                option.textContent = emp;
+                originalSelect.appendChild(option);
             });
+            
+            originalSelect.addEventListener('change', (e) => {
+                const selectedValue = e.target.value;
+                const dataToRender = selectedValue === 'todos' ? fullData : fullData.filter(item => item.empreendimento === selectedValue);
+                renderDashboard(dataToRender);
+            });
+            
+            createCustomDropdown(originalSelect);
+
             renderDashboard(fullData);
             dashboardContainer.classList.remove('hidden');
-            setTimeout(() => { dashboardContainer.scrollIntoView(); }, 10);
+            setTimeout(() => { dashboardContainer.scrollIntoView({ behavior: 'smooth' }); }, 10);
             showToast("Análise concluída com sucesso!");
         } catch (error) { showToast(error.message, 'error');
         } finally { btnGerar.disabled = false; spinner.hidden = true; }
-    });
-
-    filterSelect.addEventListener('change', (e) => {
-        const selectedValue = e.target.value;
-        const dataToRender = selectedValue === 'todos' ? fullData : fullData.filter(item => item.empreendimento === selectedValue);
-        renderDashboard(dataToRender);
     });
 
     analiseDetalhadaFilter.addEventListener('change', () => renderAnaliseDetalhadaTable(filteredData));
@@ -234,43 +382,74 @@ document.addEventListener('DOMContentLoaded', () => {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a'); a.style.display = 'none'; a.href = url;
-            a.download = `relatorio_consolidado_${new Date().toISOString().slice(0,10)}.xlsx`;
+            a.download = `relatorio_analitico_detalhado.xlsx`;
             document.body.appendChild(a); a.click();
             window.URL.revokeObjectURL(url); document.body.removeChild(a);
         } catch (error) { showToast(error.message, 'error');
         } finally { loadingOverlay.classList.add('hidden'); }
     });
-
+    
     btnDownloadPdf.addEventListener('click', () => {
         if (filteredData.length === 0) { showToast("Gere um dashboard antes de gerar o PDF.", 'error'); return; }
         loadingOverlay.classList.remove('hidden');
+        
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+        
+        const filterText = document.querySelector('.custom-select-trigger').textContent;
+        
+        pdf.setFontSize(22);
+        pdf.setTextColor('#1a202c');
+        pdf.text('Relatório Analítico de Vendas', 40, 60);
+
+        pdf.setFontSize(12);
+        pdf.setTextColor('#718096');
+        pdf.text(`Filtro Aplicado: ${filterText}`, 40, 80);
+        pdf.text(`Data de Geração: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 40, 95);
+
+        const kpi_head = [['Indicador', 'Valor']];
+        const kpi_body = [
+            ['Unidades Vendidas', document.getElementById('kpi-vendidas').textContent],
+            ['Unidades Reservadas', document.getElementById('kpi-reservadas').textContent],
+            ['Unidades Disponíveis', document.getElementById('kpi-disponiveis').textContent],
+            ['Unidades Bloqueadas', document.getElementById('kpi-bloqueadas').textContent],
+            ['VGV Realizado', document.getElementById('kpi-vgv').textContent],
+        ];
+
+        pdf.autoTable({
+            head: kpi_head,
+            body: kpi_body,
+            startY: 140,
+            theme: 'grid',
+            headStyles: { fillColor: '#4f46e5' },
+            styles: { fontSize: 12, cellPadding: 8 },
+            columnStyles: {
+                0: { fontStyle: 'bold' }
+            }
+        });
+        
+        pdf.addPage();
         const dashboardElement = document.getElementById('dashboard-container');
         dashboardElement.classList.add('pdf-capture');
 
-        html2canvas(dashboardElement, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+        html2canvas(dashboardElement, { scale: 2, useCORS: true, backgroundColor: body.classList.contains('dark-mode') ? '#111827' : '#f0f2f5' })
         .then(canvas => {
             dashboardElement.classList.remove('pdf-capture');
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
             
-            // --- Página 1: Capa com a Imagem do Dashboard ---
+            pdf.text('Resumo Visual do Dashboard', 40, 40);
             const pdfWidth = pdf.internal.pageSize.getWidth();
             const pdfHeight = pdf.internal.pageSize.getHeight();
             const ratio = canvas.width / canvas.height;
-            let newWidth = pdfWidth - 80; // Margens
+            let newWidth = pdfWidth - 80;
             let newHeight = newWidth / ratio;
-            if (newHeight > pdfHeight - 80) {
-                newHeight = pdfHeight - 80;
+            if (newHeight > pdfHeight - 100) {
+                newHeight = pdfHeight - 100;
                 newWidth = newHeight * ratio;
             }
             const x = (pdfWidth - newWidth) / 2;
-            const y = 40;
+            const y = 60;
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, newWidth, newHeight);
-            const filterText = filterSelect.options[filterSelect.selectedIndex].text;
-            pdf.setFontSize(10);
-            pdf.setTextColor('#6c757d');
-            pdf.text(`Relatório de Vendas | Filtro: ${filterText} | Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 40, 20);
-
+            
             // --- Páginas Seguintes com Tabelas de Dados ---
             if (charts.vendas) {
                 pdf.addPage();
@@ -279,14 +458,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const body = [];
                 if (charts.vendas.w.config.chart.type === 'donut') {
                     head[0] = ['Tipo de Venda', 'Quantidade'];
-                    charts.vendas.w.config.labels.forEach((label, i) => {
-                        body.push([label, charts.vendas.w.config.series[i]]);
-                    });
+                    charts.vendas.w.config.labels.forEach((label, i) => body.push([label, charts.vendas.w.config.series[i]]));
                 } else {
                     head[0] = ['Empreendimento', ...charts.vendas.w.config.series.map(s => s.name)];
-                    charts.vendas.w.config.xaxis.categories.forEach((cat, i) => {
-                        body.push([cat, ...charts.vendas.w.config.series.map(s => s.data[i])]);
-                    });
+                    charts.vendas.w.config.xaxis.categories.forEach((cat, i) => body.push([cat, ...charts.vendas.w.config.series.map(s => s.data[i])]));
                 }
                 pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text(title, 40, 40) });
             }
@@ -302,11 +477,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 const body = charts.vendasEtapa.w.config.xaxis.categories.map((cat, i) => [cat, charts.vendasEtapa.w.config.series[0].data[i]]);
                 pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text('Vendas por Etapa', 40, 40) });
             }
+            if (charts.vendasMes) {
+                pdf.addPage();
+                const head = [['Mês/Ano', 'Unidades Vendidas']];
+                const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
+                const vendasData = filteredData.filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase().trim()) && d.dataVenda);
+                const monthlyCounts = vendasData.reduce((acc, item) => {
+                    try {
+                        const parts = item.dataVenda.split('/');
+                        if (parts.length === 3) {
+                            const month = parts[1].padStart(2, '0');
+                            const year = parts[2];
+                            const key = `${year}-${month}`;
+                            acc[key] = (acc[key] || 0) + 1;
+                        }
+                    } catch (e) {}
+                    return acc;
+                }, {});
+                const sortedKeys = Object.keys(monthlyCounts).sort();
+                const body = sortedKeys.map(key => {
+                    const [year, month] = key.split('-');
+                    const formattedDate = `${month}/${year}`;
+                    return [formattedDate, monthlyCounts[key]];
+                });
+
+                pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text('Vendas por Mês', 40, 40) });
+            }
+
             pdf.addPage();
             const tableElement = document.getElementById('analise-detalhada-table');
             pdf.autoTable({ html: tableElement, startY: 60, didDrawPage: data => pdf.text('Análise Detalhada de Status', 40, 40) });
 
-            pdf.save(`dashboard_vendas_${new Date().toISOString().slice(0,10)}.pdf`);
+
+            pdf.save(`relatorio_analitico_${new Date().toISOString().slice(0,10)}.pdf`);
         }).catch(err => {
             console.error("Erro ao gerar PDF:", err);
             showToast("Falha ao gerar o PDF.", "error");
