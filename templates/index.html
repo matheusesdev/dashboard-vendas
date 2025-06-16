@@ -81,6 +81,8 @@
         <section id="dashboard-container" class="hidden">
             <header class="dashboard-header">
                 <div id="custom-select-wrapper"></div>
+                <!-- LOGO ADICIONADA AQUI -->
+                <img src="{{ url_for('static', filename='img/logo.png') }}" alt="VCA Logo" class="header-logo">
             </header>
             <div class="kpi-grid">
                 <div class="kpi-card">
@@ -152,7 +154,8 @@
 
         <footer class="app-footer">
             <div class="footer-line"></div>
-            <i class="material-icons footer-icon">apartment</i>
+             <!-- ÍCONE SUBSTITUÍDO PELA LOGO -->
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="VCA Logo" class="footer-logo">
             <p class="credit-name">Matheus Santos</p>
             <p class="credit-department">Subsetor de Sistemas <span class="separator">|</span> Setor Imobiliário</p>
         </footer>
