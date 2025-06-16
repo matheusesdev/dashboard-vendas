@@ -1,9 +1,6 @@
-# Dashboard Analítico de Vendas Imobiliárias
+![image](https://github.com/user-attachments/assets/ed7b4dfe-bcf5-432a-8a64-7c7321318f7e)# Dashboard Analítico de Vendas Imobiliárias
 
 > Uma aplicação web desenvolvida com Flask e Pandas para processar relatórios de vendas e estoque em CSV, gerando um dashboard interativo e dinâmico para análise de performance.
-
-![Visão Geral do Dashboard](static/img/dashboard_overview.png)
-*(Substitua esta imagem por uma captura de tela real do seu dashboard)*
 
 ---
 
