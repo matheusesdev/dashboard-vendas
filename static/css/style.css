@@ -352,7 +352,6 @@ body.sidebar-collapsed #sidebar-toggle .material-icons { transform: rotate(180de
 .kpi-icon.reserved { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
 .kpi-icon.available { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
 .kpi-icon.blocked { background: linear-gradient(135deg, #6b7280, #9ca3af); }
-.kpi-icon.vgv { background: linear-gradient(135deg, #8b5cf6, #a78bfa); }
 
 .kpi-content { display: flex; flex-direction: column; }
 .kpi-content .kpi-label {
@@ -554,4 +553,37 @@ body.dark-mode .custom-option.selected {
 @media (max-width: 768px) {
     main { padding: 1rem; }
     .dashboard-header { flex-direction: column; align-items: stretch; }
+}
+
+/* --- Rodapé --- */
+.app-footer {
+    text-align: center;
+    padding: 2rem 0;
+    margin-top: 3rem;
+}
+.footer-line {
+    width: 80px;
+    height: 2px;
+    background-color: var(--primary-color);
+    margin: 0 auto 1.5rem;
+    border-radius: 1px;
+}
+.footer-icon {
+    font-size: 2.5rem;
+    color: var(--border-color);
+    margin-bottom: 1rem;
+}
+.credit-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+.credit-department {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+.credit-department .separator {
+    color: var(--border-color);
+    margin: 0 0.5rem;
 }

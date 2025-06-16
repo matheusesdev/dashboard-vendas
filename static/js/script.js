@@ -54,8 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 5000);
     };
     
-    const formatCurrency = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
-
     const showChartMessage = (chartSelector, message) => {
         const el = document.querySelector(chartSelector);
         if (el) el.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; height:100%; color: var(--text-secondary); padding: 2rem;">${message}</div>`;
@@ -172,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderKPIs = (data) => {
         const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
-        let statusCounts = {}, vendidasCount = 0, vgvTotal = 0;
+        let statusCounts = {}, vendidasCount = 0;
 
         if (data.length > 0) {
             statusCounts = data.reduce((acc, d) => {
@@ -181,20 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return acc;
             }, {});
             vendidasCount = SITUACAO_VENDIDO.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
-            vgvTotal = data
-                .filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase().trim()))
-                .reduce((sum, d) => sum + (d.valorContrato || 0), 0);
         }
 
         animateValue(document.getElementById('kpi-vendidas'), 0, vendidasCount, 1000);
         animateValue(document.getElementById('kpi-reservadas'), 0, statusCounts['RESERVADA'] || 0, 1000);
         animateValue(document.getElementById('kpi-disponiveis'), 0, statusCounts['DISPONÍVEL'] || statusCounts['DISPONIVEL'] || 0, 1000);
         animateValue(document.getElementById('kpi-bloqueadas'), 0, statusCounts['BLOQUEADA'] || statusCounts['BLOQUEADO'] || 0, 1000);
-        
-        const vgvEl = document.getElementById('kpi-vgv');
-        const startVGV = parseFloat(vgvEl.innerText.replace(/[^0-9,-]+/g,"").replace(",", ".")) || 0;
-        animateValue(vgvEl, startVGV, vgvTotal, 1000);
-        setTimeout(() => { vgvEl.textContent = formatCurrency(vgvTotal); }, 1000);
     };
     
     const renderVendasChart = (data) => {
@@ -289,9 +279,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const grouped = data.reduce((acc, d) => {
                 const key = d[groupByKey] || 'Não especificado';
-                if (!acc[key]) { acc[key] = { vendidas: 0, vgvVendido: 0, reservadas: 0, disponiveis: 0, bloqueadas: 0, outros: 0 }; }
+                if (!acc[key]) { acc[key] = { vendidas: 0, reservadas: 0, disponiveis: 0, bloqueadas: 0, outros: 0 }; }
                 const situacao = (d.situacao || '').toUpperCase();
-                if (SITUACAO_VENDIDO.includes(situacao)) { acc[key].vendidas++; acc[key].vgvVendido += d.valorContrato || 0; }
+                if (SITUACAO_VENDIDO.includes(situacao)) { acc[key].vendidas++; }
                 else if (situacao === 'RESERVADA') { acc[key].reservadas++; }
                 else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') { acc[key].disponiveis++; }
                 else if (situacao === 'BLOQUEADA' || situacao === 'BLOQUEADO') { acc[key].bloqueadas++; }
@@ -299,12 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 return acc;
             }, {});
             const analysis = Object.entries(grouped).map(([key, counts]) => {
-                const precoMedio = counts.vendidas > 0 ? counts.vgvVendido / counts.vendidas : 0;
-                return { key, ...counts, total: counts.vendidas + counts.reservadas + counts.disponiveis + counts.bloqueadas + counts.outros, precoMedio: precoMedio }
+                return { key, ...counts, total: counts.vendidas + counts.reservadas + counts.disponiveis + counts.bloqueadas + counts.outros }
             }).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
-            if (analysis.length === 0) { tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`; return; }
-            tableBody.innerHTML = analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td>${row.total}</td><td class="text-right">${row.precoMedio > 0 ? formatCurrency(row.precoMedio) : '-'}</td></tr>`).join('');
-        } catch (err) { console.error("Erro na tabela detalhada:", err); tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Erro ao processar dados.</td></tr>'; }
+            if (analysis.length === 0) { tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`; return; }
+            tableBody.innerHTML = analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td>${row.total}</td></tr>`).join('');
+        } catch (err) { console.error("Erro na tabela detalhada:", err); tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Erro ao processar dados.</td></tr>'; }
     };
     
     // --- Lógica de Interação da UI ---
@@ -413,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ['Unidades Reservadas', document.getElementById('kpi-reservadas').textContent],
             ['Unidades Disponíveis', document.getElementById('kpi-disponiveis').textContent],
             ['Unidades Bloqueadas', document.getElementById('kpi-bloqueadas').textContent],
-            ['VGV Realizado', document.getElementById('kpi-vgv').textContent],
         ];
 
         pdf.autoTable({

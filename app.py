@@ -48,23 +48,14 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         df_final['TIPO DE VENDA'] = df_merged.get('Tipo de Venda')
         df_final['TIPOLOGIA'] = df_merged['Tipologia']
         df_final['UNIDADE'] = df_merged['Unidade']
-        df_final['VALOR PV'] = df_merged['Valor VGV_Estoque']
-        df_final['VALOR DO CONTRATO'] = df_merged['Valor VGV_Venda'].fillna(df_merged['Valor VGV_Estoque'])
         df_final['DATA DA VENDA'] = df_merged.get('Data Venda')
 
         # --- 4. Limpeza e Formatação ---
-        for col in ['VALOR PV', 'VALOR DO CONTRATO']:
-            df_final[col] = pd.to_numeric(
-                df_final[col].astype(str).str.replace(r'[R$.\s]', '', regex=True).str.replace(',', '.'),
-                errors='coerce'
-            ).fillna(0)
-
         df_final['SITUAÇÃO'] = df_final['SITUAÇÃO'].astype(str).str.strip().str.upper()
         
         colunas_relatorio = [
             'BLOCO', 'EMPREENDIMENTO', 'ETAPA', 'SITUAÇÃO', 
-            'TIPO DE VENDA', 'TIPOLOGIA', 'UNIDADE', 'VALOR PV', 'VALOR DO CONTRATO',
-            'DATA DA VENDA'
+            'TIPO DE VENDA', 'TIPOLOGIA', 'UNIDADE', 'DATA DA VENDA'
         ]
         
         for col in colunas_relatorio:
@@ -79,7 +70,7 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         data_for_js = df_final.copy()
         data_for_js.columns = [
             'bloco', 'empreendimento', 'etapa', 'situacao', 'tipoVenda', 
-            'tipologia', 'unidade', 'valorPV', 'valorContrato', 'dataVenda'
+            'tipologia', 'unidade', 'dataVenda'
         ]
 
         return {
@@ -119,8 +110,7 @@ def download_xlsx():
         df.rename(columns={
             'bloco': 'BLOCO', 'empreendimento': 'EMPREENDIMENTO', 'etapa': 'ETAPA', 
             'situacao': 'SITUAÇÃO', 'tipoVenda': 'TIPO DE VENDA', 'tipologia': 'TIPOLOGIA', 
-            'unidade': 'UNIDADE', 'valorPV': 'VALOR PV', 'valorContrato': 'VALOR DO CONTRATO',
-            'dataVenda': 'DATA DA VENDA'
+            'unidade': 'UNIDADE', 'dataVenda': 'DATA DA VENDA'
         }, inplace=True)
         
         df['CONTADOR'] = 1
@@ -141,11 +131,9 @@ def download_xlsx():
             title_format = workbook.add_format({'bold': True, 'font_size': 16, 'font_color': '#4F46E5', 'valign': 'vcenter'})
             subtitle_format = workbook.add_format({'bold': True, 'font_size': 11, 'font_color': '#1a202c', 'align': 'left', 'valign': 'vcenter'})
             header_format = workbook.add_format({'bold': True, 'bg_color': '#4F46E5', 'font_color': 'white', 'border': 1, 'align': 'center', 'valign': 'vcenter'})
-            currency_format = workbook.add_format({'num_format': 'R$ #,##0.00', 'border': 1})
             number_format = workbook.add_format({'num_format': '#,##0', 'border': 1})
             index_format = workbook.add_format({'bold': True, 'border': 1, 'align': 'left'})
             total_format_num = workbook.add_format({'bold': True, 'bg_color': '#f0f2f5', 'num_format': '#,##0', 'border': 1})
-            total_format_curr = workbook.add_format({'bold': True, 'bg_color': '#f0f2f5', 'num_format': 'R$ #,##0.00', 'border': 1})
             
             # --- Aba 1: Dashboard Resumo ---
             sheet_dashboard = workbook.add_worksheet('Dashboard Resumo')
@@ -189,7 +177,6 @@ def download_xlsx():
             sheet_pivots = workbook.add_worksheet('Tabelas Dinâmicas')
             current_row = 1
 
-            # --- CORRIGIDO: Função auxiliar agora usa `header=False` ---
             def write_and_format_pivot(df_pivot, title, start_row, format_func):
                 sheet_pivots.merge_range(start_row, 0, start_row, len(df_pivot.columns), title, subtitle_format)
                 df_pivot.to_excel(writer, sheet_name='Tabelas Dinâmicas', startrow=start_row + 2, header=False)
@@ -199,9 +186,7 @@ def download_xlsx():
                 sheet_pivots.write(start_row + 2, 0, df_pivot.index.name, header_format)
                 
                 for r_idx, index_name in enumerate(df_pivot.index):
-                    # Formatação da linha de índice
                     sheet_pivots.write(start_row + 3 + r_idx, 0, index_name, index_format)
-                    # Formatação das células de dados
                     for c_idx, _ in enumerate(df_pivot.columns):
                         is_total_row = (index_name == 'Total Geral')
                         cell_format = format_func(is_total_row)
@@ -213,9 +198,6 @@ def download_xlsx():
             
             pivot_table_2 = df.pivot_table(index='TIPOLOGIA', columns='SITUAÇÃO', values='CONTADOR', aggfunc='sum', fill_value=0, margins=True, margins_name='Total Geral')
             current_row = write_and_format_pivot(pivot_table_2, 'Status por Tipologia', current_row, lambda is_total: total_format_num if is_total else number_format)
-            
-            pivot_table_3 = df.pivot_table(index='EMPREENDIMENTO', columns='SITUAÇÃO', values='VALOR DO CONTRATO', aggfunc='sum', fill_value=0, margins=True, margins_name='Total Geral')
-            current_row = write_and_format_pivot(pivot_table_3, 'VGV por Empreendimento e Situação', current_row, lambda is_total: total_format_curr if is_total else currency_format)
             
             sheet_pivots.set_column('A:A', 45)
             sheet_pivots.set_column('B:Z', 18)
@@ -231,10 +213,7 @@ def download_xlsx():
                 series = df_final[col]
                 max_len = max((series.astype(str).map(len).max(), len(str(series.name)))) + 2
                 max_len = min(max_len, 50)
-                if 'VALOR' in col:
-                    worksheet_data.set_column(idx, idx, 18, currency_format)
-                else:
-                    worksheet_data.set_column(idx, idx, max_len)
+                worksheet_data.set_column(idx, idx, max_len)
 
         output.seek(0)
         return send_file(
