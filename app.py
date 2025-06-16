@@ -6,8 +6,12 @@ import numpy as np
 from io import StringIO, BytesIO
 import traceback
 from datetime import datetime
+from whitenoise import WhiteNoise # <--- ADICIONADO
 
 app = Flask(__name__)
+
+# ADICIONADO: Configuração do WhiteNoise para servir arquivos estáticos em produção
+app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static/')
 
 def processar_e_analisar(estoque_stream, vendas_stream):
     try:
@@ -18,7 +22,6 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         df_estoque.columns = [str(col).strip() for col in df_estoque.columns]
         df_vendas.columns = [str(col).strip() for col in df_vendas.columns]
         
-        # REMOVIDO 'Valor VGV' e 'Valor do contrato' das colunas essenciais
         colunas_essenciais_estoque = ['Empreendimento', 'Unidade', 'Situação', 'Tipologia', 'Etapa']
         colunas_essenciais_vendas = ['Empreendimento', 'Unidade', 'Situação atual', 'Tipo de Venda', 'Data Venda']
 
@@ -27,11 +30,8 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         for col in colunas_essenciais_vendas:
             if col not in df_vendas.columns: raise KeyError(f"'{col}' no arquivo de Vendas")
 
-        # ATUALIZADO: Renomeia apenas a coluna de situação
         df_vendas.rename(columns={'Situação atual': 'Situação'}, inplace=True)
         
-        # --- 2. Consolidação com Merge ---
-        # ATUALIZADO: Seleciona apenas as colunas de vendas que realmente existem e são usadas
         colunas_vendas_para_merge = ['Empreendimento', 'Unidade', 'Situação', 'Tipo de Venda', 'Data Venda']
         df_merged = pd.merge(
             df_estoque,
@@ -41,7 +41,6 @@ def processar_e_analisar(estoque_stream, vendas_stream):
             suffixes=('_Estoque', '_Venda')
         )
         
-        # --- 3. Criação do DataFrame final para o relatório ---
         df_final = pd.DataFrame()
         
         df_final['BLOCO'] = df_merged.get('Bloco_Estoque') or df_merged.get('Bloco')
@@ -53,10 +52,8 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         df_final['UNIDADE'] = df_merged['Unidade']
         df_final['DATA DA VENDA'] = df_merged.get('Data Venda')
 
-        # --- 4. Limpeza e Formatação ---
         df_final['SITUAÇÃO'] = df_final['SITUAÇÃO'].astype(str).str.strip().str.upper()
         
-        # REMOVIDO colunas de VALOR
         colunas_relatorio = [
             'BLOCO', 'EMPREENDIMENTO', 'ETAPA', 'SITUAÇÃO', 
             'TIPO DE VENDA', 'TIPOLOGIA', 'UNIDADE', 'DATA DA VENDA'
@@ -70,8 +67,6 @@ def processar_e_analisar(estoque_stream, vendas_stream):
         
         empreendimentos_unicos = sorted(df_final['EMPREENDIMENTO'].dropna().unique().tolist())
 
-        # --- 5. Preparação dos dados para o Frontend (JavaScript) ---
-        # REMOVIDO colunas de VALOR
         data_for_js = df_final.copy()
         data_for_js.columns = [
             'bloco', 'empreendimento', 'etapa', 'situacao', 'tipoVenda', 
@@ -112,7 +107,6 @@ def download_xlsx():
 
         df = pd.DataFrame(data)
         
-        # REMOVIDO colunas de VALOR
         df.rename(columns={
             'bloco': 'BLOCO', 'empreendimento': 'EMPREENDIMENTO', 'etapa': 'ETAPA', 
             'situacao': 'SITUAÇÃO', 'tipoVenda': 'TIPO DE VENDA', 'tipologia': 'TIPOLOGIA', 
@@ -141,7 +135,6 @@ def download_xlsx():
             index_format = workbook.add_format({'bold': True, 'border': 1, 'align': 'left'})
             total_format_num = workbook.add_format({'bold': True, 'bg_color': '#f0f2f5', 'num_format': '#,##0', 'border': 1})
             
-            # --- Aba 1: Dashboard Resumo ---
             sheet_dashboard = workbook.add_worksheet('Dashboard Resumo')
             sheet_dashboard.hide_gridlines(2)
 
@@ -179,11 +172,9 @@ def download_xlsx():
             chart.set_plotarea({'border': {'none': True}})
             sheet_dashboard.insert_chart('E5', chart, {'x_scale': 1.5, 'y_scale': 1.2})
             
-            # --- Aba 2: Tabelas Dinâmicas Detalhadas ---
             sheet_pivots = workbook.add_worksheet('Tabelas Dinâmicas')
             current_row = 1
 
-            # REMOVIDA A LÓGICA DE FORMATAÇÃO DE MOEDA (currency)
             def write_and_format_pivot(df_pivot, title, start_row, format_func):
                 sheet_pivots.merge_range(start_row, 0, start_row, len(df_pivot.columns), title, subtitle_format)
                 df_pivot.to_excel(writer, sheet_name='Tabelas Dinâmicas', startrow=start_row + 2, header=False)
@@ -209,14 +200,12 @@ def download_xlsx():
             sheet_pivots.set_column('A:A', 45)
             sheet_pivots.set_column('B:Z', 18)
 
-            # --- Aba 3: Dados Consolidados ---
             df_final = df.drop(columns=['CONTADOR', 'MÊS_ANO', 'MÊS_ANO_NUM'], errors='ignore')
             df_final.to_excel(writer, index=False, sheet_name='Dados Consolidados')
             worksheet_data = writer.sheets['Dados Consolidados']
             for col_num, value in enumerate(df_final.columns.values):
                 worksheet_data.write(0, col_num, value, header_format)
             
-            # REMOVIDA A FORMATAÇÃO DE MOEDA (currency)
             for idx, col in enumerate(df_final):
                 series = df_final[col]
                 max_len = max((series.astype(str).map(len).max(), len(str(series.name)))) + 2
