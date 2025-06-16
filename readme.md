@@ -127,7 +127,6 @@ Para que a aplicação funcione corretamente, os arquivos CSV devem conter as se
 │   │   └── style.css       # Estilos da aplicação
 │   ├── img/
 │   │   ├── logo_vca.png    # Logo da empresa
-│   │   └── dashboard_overview.png # Screenshot do projeto
 │   └── js/
 │       └── script.js       # Lógica do frontend (Charts, Interatividade)
 └── templates/
