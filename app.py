@@ -6,11 +6,11 @@ import numpy as np
 from io import StringIO, BytesIO
 import traceback
 from datetime import datetime
-from whitenoise import WhiteNoise # <--- ADICIONADO
+from whitenoise import WhiteNoise
 
 app = Flask(__name__)
 
-# ADICIONADO: Configuração do WhiteNoise para servir arquivos estáticos em produção
+# Configuração do WhiteNoise para servir arquivos estáticos em produção
 app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static/')
 
 def processar_e_analisar(estoque_stream, vendas_stream):
@@ -123,7 +123,6 @@ def download_xlsx():
         df_vendas_only['MÊS_ANO'] = df_vendas_only['DATA DA VENDA'].dt.month.map(meses) + " de " + df_vendas_only['DATA DA VENDA'].dt.year.astype(str)
         df_vendas_only = df_vendas_only.sort_values('MÊS_ANO_NUM')
 
-
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
@@ -135,9 +134,9 @@ def download_xlsx():
             index_format = workbook.add_format({'bold': True, 'border': 1, 'align': 'left'})
             total_format_num = workbook.add_format({'bold': True, 'bg_color': '#f0f2f5', 'num_format': '#,##0', 'border': 1})
             
+            # Aba 1: Dashboard Resumo
             sheet_dashboard = workbook.add_worksheet('Dashboard Resumo')
             sheet_dashboard.hide_gridlines(2)
-
             sheet_dashboard.set_row(0, 30)
             sheet_dashboard.write('B1', 'Relatório Analítico de Vendas', title_format)
             sheet_dashboard.write('B2', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", workbook.add_format({'color': '#718096'}))
@@ -172,6 +171,7 @@ def download_xlsx():
             chart.set_plotarea({'border': {'none': True}})
             sheet_dashboard.insert_chart('E5', chart, {'x_scale': 1.5, 'y_scale': 1.2})
             
+            # Aba 2: Tabelas Dinâmicas Detalhadas
             sheet_pivots = workbook.add_worksheet('Tabelas Dinâmicas')
             current_row = 1
 
@@ -200,6 +200,7 @@ def download_xlsx():
             sheet_pivots.set_column('A:A', 45)
             sheet_pivots.set_column('B:Z', 18)
 
+            # Aba 3: Dados Consolidados
             df_final = df.drop(columns=['CONTADOR', 'MÊS_ANO', 'MÊS_ANO_NUM'], errors='ignore')
             df_final.to_excel(writer, index=False, sheet_name='Dados Consolidados')
             worksheet_data = writer.sheets['Dados Consolidados']

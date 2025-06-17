@@ -426,6 +426,9 @@ body.sidebar-collapsed #sidebar-toggle .material-icons { transform: rotate(180de
 #analise-detalhada-table tbody tr:hover {
     background-color: var(--bg-color);
 }
+#analise-detalhada-table tbody b {
+    color: var(--text-primary);
+}
 .text-right { text-align: right !important; }
 
 /* --- 🛠️ UTILITÁRIOS E OUTROS --- */

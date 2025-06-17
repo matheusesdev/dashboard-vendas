@@ -151,7 +151,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector("#chart-unidades-tipologia").innerHTML = '';
         document.querySelector("#chart-vendas-etapa").innerHTML = '';
         document.querySelector("#chart-vendas-mes").innerHTML = '';
-        document.querySelector("#analise-detalhada-body").innerHTML = '';
         
         if (!data || data.length === 0) {
             showToast("Nenhum dado para exibir para este filtro.", "error");
@@ -270,30 +269,86 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const renderAnaliseDetalhadaTable = (data) => {
+        const tableThead = document.querySelector('#analise-detalhada-table thead');
         const tableBody = document.getElementById('analise-detalhada-body');
-        const headerCell = document.getElementById('analise-detalhada-header');
         const groupByKey = analiseDetalhadaFilter.value;
-        const selectedOption = analiseDetalhadaFilter.options[analiseDetalhadaFilter.selectedIndex];
-        headerCell.textContent = selectedOption.textContent;
-        const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
+
+        tableThead.innerHTML = '';
+        tableBody.innerHTML = '';
+
         try {
-            const grouped = data.reduce((acc, d) => {
-                const key = d[groupByKey] || 'Não especificado';
-                if (!acc[key]) { acc[key] = { vendidas: 0, reservadas: 0, disponiveis: 0, bloqueadas: 0, outros: 0 }; }
-                const situacao = (d.situacao || '').toUpperCase();
-                if (SITUACAO_VENDIDO.includes(situacao)) { acc[key].vendidas++; }
-                else if (situacao === 'RESERVADA') { acc[key].reservadas++; }
-                else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') { acc[key].disponiveis++; }
-                else if (situacao === 'BLOQUEADA' || situacao === 'BLOQUEADO') { acc[key].bloqueadas++; }
-                else { acc[key].outros++; }
-                return acc;
-            }, {});
-            const analysis = Object.entries(grouped).map(([key, counts]) => {
-                return { key, ...counts, total: counts.vendidas + counts.reservadas + counts.disponiveis + counts.bloqueadas + counts.outros }
-            }).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
-            if (analysis.length === 0) { tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`; return; }
-            tableBody.innerHTML = analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td>${row.total}</td></tr>`).join('');
-        } catch (err) { console.error("Erro na tabela detalhada:", err); tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Erro ao processar dados.</td></tr>'; }
+            if (groupByKey === 'tipologiaPorEtapa') {
+                const allTypologies = [...new Set(data.map(d => d.tipologia).filter(Boolean))].sort();
+                
+                let headerHtml = '<tr><th>Etapa</th>';
+                allTypologies.forEach(t => headerHtml += `<th>${t}</th>`);
+                headerHtml += '<th>Total</th></tr>';
+                tableThead.innerHTML = headerHtml;
+
+                const groupedByEtapa = data.reduce((acc, d) => {
+                    const etapa = d.etapa || 'Não especificado';
+                    const tipologia = d.tipologia;
+                    if (!tipologia) return acc;
+
+                    if (!acc[etapa]) acc[etapa] = {};
+                    acc[etapa][tipologia] = (acc[etapa][tipologia] || 0) + 1;
+                    return acc;
+                }, {});
+
+                let bodyHtml = '';
+                Object.entries(groupedByEtapa).sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric: true})).forEach(([etapa, typologyCounts]) => {
+                    let rowHtml = `<tr><td>${etapa}</td>`;
+                    let rowTotal = 0;
+                    allTypologies.forEach(typology => {
+                        const count = typologyCounts[typology] || 0;
+                        rowHtml += `<td>${count}</td>`;
+                        rowTotal += count;
+                    });
+                    rowHtml += `<td><b>${rowTotal}</b></td></tr>`;
+                    bodyHtml += rowHtml;
+                });
+                tableBody.innerHTML = bodyHtml || `<tr><td colspan="${allTypologies.length + 2}" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
+
+            } else {
+                const selectedOption = analiseDetalhadaFilter.options[analiseDetalhadaFilter.selectedIndex];
+                const headerText = selectedOption.textContent;
+                
+                tableThead.innerHTML = `
+                    <tr>
+                        <th>${headerText}</th>
+                        <th>Vendidas</th>
+                        <th>Reservadas</th>
+                        <th>Disponíveis</th>
+                        <th>Bloqueadas</th>
+                        <th>Outros</th>
+                        <th>Total</th>
+                    </tr>`;
+
+                const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
+                const grouped = data.reduce((acc, d) => {
+                    const key = d[groupByKey] || 'Não especificado';
+                    if (!acc[key]) { acc[key] = { vendidas: 0, reservadas: 0, disponiveis: 0, bloqueadas: 0, outros: 0 }; }
+                    const situacao = (d.situacao || '').toUpperCase();
+                    if (SITUACAO_VENDIDO.includes(situacao)) { acc[key].vendidas++; }
+                    else if (situacao === 'RESERVADA') { acc[key].reservadas++; }
+                    else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') { acc[key].disponiveis++; }
+                    else if (situacao === 'BLOQUEADA' || situacao === 'BLOQUEADO') { acc[key].bloqueadas++; }
+                    else { acc[key].outros++; }
+                    return acc;
+                }, {});
+
+                const analysis = Object.entries(grouped).map(([key, counts]) => {
+                    return { key, ...counts, total: counts.vendidas + counts.reservadas + counts.disponiveis + counts.bloqueadas + counts.outros }
+                }).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+
+                tableBody.innerHTML = analysis.length > 0
+                    ? analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td><b>${row.total}</b></td></tr>`).join('')
+                    : '<tr><td colspan="7" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>';
+            }
+        } catch (err) {
+            console.error("Erro na tabela detalhada:", err);
+            tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Erro ao processar dados.</td></tr>';
+        }
     };
     
     // --- Lógica de Interação da UI ---
@@ -438,7 +493,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const y = 60;
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, newWidth, newHeight);
             
-            // --- Páginas Seguintes com Tabelas de Dados ---
             if (charts.vendas) {
                 pdf.addPage();
                 const title = document.getElementById('vendas-empreendimento-title').textContent;
@@ -494,7 +548,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             pdf.addPage();
             const tableElement = document.getElementById('analise-detalhada-table');
-            pdf.autoTable({ html: tableElement, startY: 60, didDrawPage: data => pdf.text('Análise Detalhada de Status', 40, 40) });
+            pdf.autoTable({ html: tableElement, startY: 60, didDrawPage: data => pdf.text('Análise Detalhada', 40, 40) });
 
 
             pdf.save(`relatorio_analitico_${new Date().toISOString().slice(0,10)}.pdf`);
