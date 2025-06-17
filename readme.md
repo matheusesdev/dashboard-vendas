@@ -2,9 +2,6 @@
 
 > Uma aplicação web desenvolvida com Flask e Pandas para processar relatórios de vendas e estoque em CSV, gerando um dashboard interativo e dinâmico para análise de performance.
 
-![Visão Geral do Dashboard](static/img/dashboard_overview.png)
-*(Substitua esta imagem por uma captura de tela real do seu dashboard)*
-
 ---
 
 ## ✨ Features Principais
@@ -130,7 +127,6 @@ Para que a aplicação funcione corretamente, os arquivos CSV devem conter as se
 │   │   └── style.css       # Estilos da aplicação
 │   ├── img/
 │   │   ├── logo_vca.png    # Logo da empresa
-│   │   └── dashboard_overview.png # Screenshot do projeto
 │   └── js/
 │       └── script.js       # Lógica do frontend (Charts, Interatividade)
 └── templates/
