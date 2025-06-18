@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dash de Vendas</title>
+    <title>Dashboard de Vendas</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -24,27 +24,22 @@
 
     <div id="toast-container"></div>
 
-    <!-- Barra Lateral (Sidebar) -->
-    <aside class="sidebar">
-        <button id="sidebar-toggle" title="Recolher/Expandir Barra Lateral"><i class="material-icons">chevron_left</i></button>
-        
-        <div class="sidebar-header">
-            <i class="material-icons logo">assessment</i>
+    <!-- TELA DE UPLOAD INICIAL -->
+    <div id="upload-container">
+        <div class="upload-box">
+            <img src="{{ url_for('static', filename='img/logo_vca.png') }}" alt="VCA Logo" class="upload-logo">
             <h1>Análise de Vendas</h1>
-        </div>
-        
-        <form id="uploadForm">
-            <section id="uploadSection">
-                <h2>Controles</h2>
+            <p class="upload-subtitle">Selecione os relatórios de estoque e vendas para começar.</p>
+            <form id="uploadForm">
                 <div class="file-input-group">
-                    <label for="estoqueFile"><i class="material-icons" style="font-size: 1rem;">source</i> Rel. de Estoque</label>
+                    <label for="estoqueFile"><i class="material-icons">source</i> Relatório de Estoque (.csv)</label>
                     <button type="button" class="file-select-button" onclick="document.getElementById('estoqueFile').click()">
                         <span id="estoqueFileName">Selecionar arquivo</span>
                     </button>
                     <input type="file" id="estoqueFile" name="estoqueFile" accept=".csv" hidden>
                 </div>
                 <div class="file-input-group">
-                    <label for="vendasFile"><i class="material-icons" style="font-size: 1rem;">paid</i> Rel. de Vendas</label>
+                    <label for="vendasFile"><i class="material-icons">paid</i> Relatório de Vendas (.csv)</label>
                     <button type="button" class="file-select-button" onclick="document.getElementById('vendasFile').click()">
                         <span id="vendasFileName">Selecionar arquivo</span>
                     </button>
@@ -54,18 +49,25 @@
                     <div class="spinner" id="spinner" hidden></div>
                     <span class="btn-text">Gerar Dashboard</span>
                 </button>
-            </section>
-        </form>
-
-        <nav class="sidebar-nav">
-            <a id="btnDownloadXlsx" class="nav-item">
-                <i class="material-icons">grid_on</i>
-                <span class="nav-text">Baixar Planilha (XLSX)</span>
-            </a>
-            <a id="btnDownloadPdf" class="nav-item">
-                <i class="material-icons">picture_as_pdf</i>
-                <span class="nav-text">Gerar Relatório (PDF)</span>
-            </a>
+            </form>
+        </div>
+    </div>
+    
+    <!-- HEADER DO DASHBOARD -->
+    <header id="app-header" class="hidden">
+        <div class="header-left">
+            <img src="{{ url_for('static', filename='img/logo_vca.png') }}" alt="VCA Logo" class="header-app-logo">
+            <h2>Análise de Vendas</h2>
+        </div>
+        <div class="header-right">
+            <nav class="header-nav">
+                <a id="btnDownloadXlsx" class="nav-item" title="Baixar Planilha (XLSX)">
+                    <i class="material-icons">grid_on</i>
+                </a>
+                <a id="btnDownloadPdf" class="nav-item" title="Gerar Relatório (PDF)">
+                    <i class="material-icons">picture_as_pdf</i>
+                </a>
+            </nav>
             <div class="theme-switcher">
                 <input type="radio" id="light-theme" name="theme" checked>
                 <label for="light-theme" title="Tema Claro"><i class="material-icons">light_mode</i></label>
@@ -73,15 +75,14 @@
                 <input type="radio" id="dark-theme" name="theme">
                 <label for="dark-theme" title="Tema Escuro"><i class="material-icons">dark_mode</i></label>
             </div>
-        </nav>
-    </aside>
+        </div>
+    </header>
 
-    <!-- Conteúdo Principal -->
-    <main>
-        <section id="dashboard-container" class="hidden">
+    <!-- Conteúdo Principal do Dashboard -->
+    <main id="dashboard-content" class="hidden">
+        <section id="dashboard-container">
             <header class="dashboard-header">
                 <div id="custom-select-wrapper"></div>
-                <img src="{{ url_for('static', filename='img/LOGO.png') }}" alt="VCA Logo" class="header-logo">
             </header>
             <div class="kpi-grid">
                 <div class="kpi-card">
@@ -117,12 +118,12 @@
                 <div class="chart-card"><h3 class="chart-title" id="vendas-empreendimento-title">Tipos de Venda por Empreendimento</h3><div id="chart-vendas-empreendimento"></div></div>
                 <div class="chart-card"><h3 class="chart-title">Unidades por Tipologia</h3><div id="chart-unidades-tipologia"></div></div>
                 <div class="chart-card"><h3 class="chart-title">Vendas por Etapa</h3><div id="chart-vendas-etapa"></div></div>
-                <div class="chart-card"><h3 class="chart-title">Vendas por Mês</h3><div id="chart-vendas-mes"></div></div>
+                <div class="chart-card chart-full-width"><h3 class="chart-title">Vendas por Mês</h3><div id="chart-vendas-mes"></div></div>
             </div>
             
             <div class="table-container">
                  <div class="table-header">
-                    <h3 class="chart-title">Análise Detalhada</h3>
+                    <h3 class="chart-title">Análise Detalhada de Status</h3>
                     <div class="group-by-container">
                         <label for="analise-detalhada-filter">Agrupar por:</label>
                         <select id="analise-detalhada-filter">
@@ -130,27 +131,32 @@
                             <option value="tipologia">Tipologia</option>
                             <option value="etapa">Etapa</option>
                             <option value="tipoVenda">Tipo de Venda</option>
-                            <option value="tipologiaPorEtapa">Tipologia por Etapa</option>
                         </select>
                     </div>
                  </div>
                  <table id="analise-detalhada-table">
-                    <thead>
-                        <!-- Gerado dinamicamente pelo JavaScript -->
-                    </thead>
-                    <tbody id="analise-detalhada-body">
-                    </tbody>
+                    <thead></thead>
+                    <tbody id="analise-detalhada-body"></tbody>
                  </table>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <h3 class="chart-title">Análise de Tipologias por Etapa</h3>
+                </div>
+                <table id="tipologia-por-etapa-table">
+                    <thead></thead>
+                    <tbody id="tipologia-por-etapa-body"></tbody>
+                </table>
             </div>
         </section>
 
         <footer class="app-footer">
             <div class="footer-line"></div>
-            <img src="{{ url_for('static', filename='img/LOGO.png') }}" alt="VCA Logo" class="footer-logo">
+            <img src="{{ url_for('static', filename='img/logo_vca.png') }}" alt="VCA Logo" class="footer-logo">
             <p class="credit-name">Matheus Santos</p>
             <p class="credit-department">Subsetor de Sistemas <span class="separator">|</span> Setor Imobiliário</p>
         </footer>
-
     </main>
     
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>

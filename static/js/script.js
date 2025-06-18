@@ -12,7 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const form = document.getElementById('uploadForm');
     const btnGerar = document.getElementById('btnGerar');
     const spinner = document.getElementById('spinner');
-    const dashboardContainer = document.getElementById('dashboard-container');
+    const uploadContainer = document.getElementById('upload-container');
+    const appHeader = document.getElementById('app-header');
+    const dashboardContent = document.getElementById('dashboard-content');
     const customSelectWrapper = document.getElementById('custom-select-wrapper');
     const btnDownloadXlsx = document.getElementById('btnDownloadXlsx');
     const btnDownloadPdf = document.getElementById('btnDownloadPdf');
@@ -22,9 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const estoqueFileName = document.getElementById('estoqueFileName');
     const vendasFileName = document.getElementById('vendasFileName');
     const analiseDetalhadaFilter = document.getElementById('analise-detalhada-filter');
-    const sidebarToggle = document.getElementById('sidebar-toggle');
     const lightThemeToggle = document.getElementById('light-theme');
     const darkThemeToggle = document.getElementById('dark-theme');
+    const tipologiaPorEtapaTableBody = document.getElementById('tipologia-por-etapa-body');
 
     // --- Funções Utilitárias ---
     const checkFormState = () => btnGerar.disabled = !(estoqueFileInput.files.length > 0 && vendasFileInput.files.length > 0);
@@ -88,31 +90,24 @@ document.addEventListener('DOMContentLoaded', () => {
         yaxis: { labels: { style: { colors: 'var(--text-secondary)' } } }
     });
     
-    // --- Lógica do Dropdown Customizado ---
     const createCustomDropdown = (originalSelect) => {
         originalSelect.style.display = 'none';
-
         const container = document.createElement('div');
         container.className = 'custom-select-container';
-
         const trigger = document.createElement('div');
         trigger.className = 'custom-select-trigger';
         trigger.textContent = originalSelect.options[originalSelect.selectedIndex].textContent;
         container.appendChild(trigger);
-        
         const options = document.createElement('div');
         options.className = 'custom-options';
-
         Array.from(originalSelect.options).forEach(optionEl => {
             const customOption = document.createElement('div');
             customOption.className = 'custom-option';
             customOption.textContent = optionEl.textContent;
             customOption.dataset.value = optionEl.value;
-
             if (optionEl.selected) {
                 customOption.classList.add('selected');
             }
-
             customOption.addEventListener('click', () => {
                 options.querySelector('.selected')?.classList.remove('selected');
                 customOption.classList.add('selected');
@@ -123,18 +118,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     originalSelect.dispatchEvent(new Event('change'));
                 }
             });
-
             options.appendChild(customOption);
         });
-
         container.appendChild(options);
         customSelectWrapper.innerHTML = '';
         customSelectWrapper.appendChild(container);
-
         trigger.addEventListener('click', () => {
             container.classList.toggle('open');
         });
-
         window.addEventListener('click', (e) => {
             if (!container.contains(e.target)) {
                 container.classList.remove('open');
@@ -142,7 +133,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // --- Lógica de Renderização ---
     const renderDashboard = (data) => {
         Object.values(charts).forEach(chart => chart?.destroy());
         charts = {};
@@ -165,12 +155,12 @@ document.addEventListener('DOMContentLoaded', () => {
         renderVendasPorEtapaChart(data);
         renderVendasPorMesChart(data);
         renderAnaliseDetalhadaTable(data);
+        renderTipologiaPorEtapaTable(data);
     };
 
     const renderKPIs = (data) => {
         const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
         let statusCounts = {}, vendidasCount = 0;
-
         if (data.length > 0) {
             statusCounts = data.reduce((acc, d) => {
                 const situacao = (d.situacao || 'INDEFINIDO').toUpperCase().trim();
@@ -179,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, {});
             vendidasCount = SITUACAO_VENDIDO.reduce((sum, s) => sum + (statusCounts[s] || 0), 0);
         }
-
         animateValue(document.getElementById('kpi-vendidas'), 0, vendidasCount, 1000);
         animateValue(document.getElementById('kpi-reservadas'), 0, statusCounts['RESERVADA'] || 0, 1000);
         animateValue(document.getElementById('kpi-disponiveis'), 0, statusCounts['DISPONÍVEL'] || statusCounts['DISPONIVEL'] || 0, 1000);
@@ -277,82 +266,131 @@ document.addEventListener('DOMContentLoaded', () => {
         tableBody.innerHTML = '';
 
         try {
-            if (groupByKey === 'tipologiaPorEtapa') {
-                const allTypologies = [...new Set(data.map(d => d.tipologia).filter(Boolean))].sort();
-                
-                let headerHtml = '<tr><th>Etapa</th>';
-                allTypologies.forEach(t => headerHtml += `<th>${t}</th>`);
-                headerHtml += '<th>Total</th></tr>';
-                tableThead.innerHTML = headerHtml;
+            const selectedOption = analiseDetalhadaFilter.options[analiseDetalhadaFilter.selectedIndex];
+            const headerText = selectedOption.textContent;
+            
+            tableThead.innerHTML = `
+                <tr>
+                    <th>${headerText}</th>
+                    <th>Vendidas</th>
+                    <th>Reservadas</th>
+                    <th>Disponíveis</th>
+                    <th>Bloqueadas</th>
+                    <th>Outros</th>
+                    <th>Total</th>
+                </tr>`;
 
-                const groupedByEtapa = data.reduce((acc, d) => {
-                    const etapa = d.etapa || 'Não especificado';
-                    const tipologia = d.tipologia;
-                    if (!tipologia) return acc;
+            const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
+            const grouped = data.reduce((acc, d) => {
+                const key = d[groupByKey] || 'Não especificado';
+                if (!acc[key]) { acc[key] = { vendidas: 0, reservadas: 0, disponiveis: 0, bloqueadas: 0, outros: 0 }; }
+                const situacao = (d.situacao || '').toUpperCase();
+                if (SITUACAO_VENDIDO.includes(situacao)) { acc[key].vendidas++; }
+                else if (situacao === 'RESERVADA') { acc[key].reservadas++; }
+                else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') { acc[key].disponiveis++; }
+                else if (situacao === 'BLOQUEADA' || situacao === 'BLOQUEADO') { acc[key].bloqueadas++; }
+                else { acc[key].outros++; }
+                return acc;
+            }, {});
 
-                    if (!acc[etapa]) acc[etapa] = {};
-                    acc[etapa][tipologia] = (acc[etapa][tipologia] || 0) + 1;
-                    return acc;
-                }, {});
+            const analysis = Object.entries(grouped).map(([key, counts]) => {
+                return { key, ...counts, total: counts.vendidas + counts.reservadas + counts.disponiveis + counts.bloqueadas + counts.outros }
+            }).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
 
-                let bodyHtml = '';
-                Object.entries(groupedByEtapa).sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric: true})).forEach(([etapa, typologyCounts]) => {
-                    let rowHtml = `<tr><td>${etapa}</td>`;
-                    let rowTotal = 0;
-                    allTypologies.forEach(typology => {
-                        const count = typologyCounts[typology] || 0;
-                        rowHtml += `<td>${count}</td>`;
-                        rowTotal += count;
-                    });
-                    rowHtml += `<td><b>${rowTotal}</b></td></tr>`;
-                    bodyHtml += rowHtml;
-                });
-                tableBody.innerHTML = bodyHtml || `<tr><td colspan="${allTypologies.length + 2}" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
+            tableBody.innerHTML = analysis.length > 0
+                ? analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td><b>${row.total}</b></td></tr>`).join('')
+                : `<tr><td colspan="7" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
 
-            } else {
-                const selectedOption = analiseDetalhadaFilter.options[analiseDetalhadaFilter.selectedIndex];
-                const headerText = selectedOption.textContent;
-                
-                tableThead.innerHTML = `
-                    <tr>
-                        <th>${headerText}</th>
-                        <th>Vendidas</th>
-                        <th>Reservadas</th>
-                        <th>Disponíveis</th>
-                        <th>Bloqueadas</th>
-                        <th>Outros</th>
-                        <th>Total</th>
-                    </tr>`;
-
-                const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
-                const grouped = data.reduce((acc, d) => {
-                    const key = d[groupByKey] || 'Não especificado';
-                    if (!acc[key]) { acc[key] = { vendidas: 0, reservadas: 0, disponiveis: 0, bloqueadas: 0, outros: 0 }; }
-                    const situacao = (d.situacao || '').toUpperCase();
-                    if (SITUACAO_VENDIDO.includes(situacao)) { acc[key].vendidas++; }
-                    else if (situacao === 'RESERVADA') { acc[key].reservadas++; }
-                    else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') { acc[key].disponiveis++; }
-                    else if (situacao === 'BLOQUEADA' || situacao === 'BLOQUEADO') { acc[key].bloqueadas++; }
-                    else { acc[key].outros++; }
-                    return acc;
-                }, {});
-
-                const analysis = Object.entries(grouped).map(([key, counts]) => {
-                    return { key, ...counts, total: counts.vendidas + counts.reservadas + counts.disponiveis + counts.bloqueadas + counts.outros }
-                }).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
-
-                tableBody.innerHTML = analysis.length > 0
-                    ? analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td><b>${row.total}</b></td></tr>`).join('')
-                    : '<tr><td colspan="7" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>';
-            }
         } catch (err) {
-            console.error("Erro na tabela detalhada:", err);
+            console.error("Erro na tabela de status:", err);
             tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Erro ao processar dados.</td></tr>';
         }
     };
-    
-    // --- Lógica de Interação da UI ---
-    
+
+    const renderTipologiaPorEtapaTable = (data) => {
+        const tableThead = document.querySelector('#tipologia-por-etapa-table thead');
+        tipologiaPorEtapaTableBody.innerHTML = '';
+        tableThead.innerHTML = '';
+        
+        try {
+            const allTypologies = [...new Set(data.map(d => d.tipologia).filter(Boolean))].sort();
+            
+            if (allTypologies.length === 0) {
+                tableThead.innerHTML = `<tr><th>Análise de Tipologias por Etapa</th></tr>`;
+                tipologiaPorEtapaTableBody.innerHTML = '<tr><td style="text-align:center;">Não há dados de tipologia para analisar.</td></tr>';
+                return;
+            }
+
+            let headerHtml = '<tr><th>Etapa</th>';
+            allTypologies.forEach(t => headerHtml += `<th class="text-center">${t}</th>`);
+            headerHtml += '<th class="text-right">Total</th></tr>';
+            tableThead.innerHTML = headerHtml;
+
+            const groupedData = data.reduce((acc, d) => {
+                const etapa = d.etapa || 'Não especificado';
+                const tipologia = d.tipologia;
+                const situacao = (d.situacao || 'OUTROS').toUpperCase().trim();
+                
+                if (!tipologia) return acc;
+
+                if (!acc[etapa]) {
+                    acc[etapa] = { totalCounts: {}, statusCounts: {} };
+                }
+                if (!acc[etapa].statusCounts[tipologia]) {
+                    acc[etapa].statusCounts[tipologia] = { VENDIDA: 0, DISPONIVEL: 0, RESERVADA: 0, BLOQUEADA: 0, OUTROS: 0 };
+                }
+
+                acc[etapa].totalCounts[tipologia] = (acc[etapa].totalCounts[tipologia] || 0) + 1;
+                
+                if (situacao === 'VENDIDO' || situacao === 'VENDIDA') {
+                    acc[etapa].statusCounts[tipologia].VENDIDA++;
+                } else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') {
+                    acc[etapa].statusCounts[tipologia].DISPONIVEL++;
+                } else if (situacao === 'RESERVADA') {
+                    acc[etapa].statusCounts[tipologia].RESERVADA++;
+                } else if (situacao === 'BLOQUEADO' || situacao === 'BLOQUEADA') {
+                    acc[etapa].statusCounts[tipologia].BLOQUEADA++;
+                } else {
+                    acc[etapa].statusCounts[tipologia].OUTROS++;
+                }
+                return acc;
+            }, {});
+            
+            let bodyHtml = '';
+            Object.entries(groupedData).sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric: true})).forEach(([etapa, counts]) => {
+                let summaryRowHtml = `<tr class="summary-row" data-etapa="${etapa}"><td class="text-center"><i class="material-icons expand-toggle">chevron_right</i> ${etapa}</td>`;
+                let rowTotal = 0;
+                allTypologies.forEach(typology => {
+                    const count = counts.totalCounts[typology] || 0;
+                    summaryRowHtml += `<td class="text-center">${count}</td>`;
+                    rowTotal += count;
+                });
+                summaryRowHtml += `<td class="text-right"><b>${rowTotal}</b></td></tr>`;
+
+                let detailRowHtml = `<tr class="detail-row"><td class="indent-cell"></td>`;
+                allTypologies.forEach(typology => {
+                    const status = counts.statusCounts[typology] || { VENDIDA: 0, DISPONIVEL: 0, RESERVADA: 0, BLOQUEADA: 0, OUTROS: 0 };
+                    let pillsHtml = '';
+                    if (status.VENDIDA > 0) pillsHtml += `<span class="status-pill sold" data-tooltip="Vendidas"><i class="material-icons">check_circle</i> ${status.VENDIDA}</span>`;
+                    if (status.DISPONIVEL > 0) pillsHtml += `<span class="status-pill available" data-tooltip="Disponíveis"><i class="material-icons">storefront</i> ${status.DISPONIVEL}</span>`;
+                    if (status.RESERVADA > 0) pillsHtml += `<span class="status-pill reserved" data-tooltip="Reservadas"><i class="material-icons">schedule</i> ${status.RESERVADA}</span>`;
+                    if (status.BLOQUEADA > 0) pillsHtml += `<span class="status-pill blocked" data-tooltip="Bloqueadas"><i class="material-icons">lock</i> ${status.BLOQUEADA}</span>`;
+                    if (status.OUTROS > 0) pillsHtml += `<span class="status-pill others" data-tooltip="Outros"><i class="material-icons">help_outline</i> ${status.OUTROS}</span>`;
+                    
+                    detailRowHtml += `<td class="text-center"><div class="status-pills">${pillsHtml}</div></td>`;
+                });
+                detailRowHtml += `<td></td></tr>`;
+
+                bodyHtml += summaryRowHtml + detailRowHtml;
+            });
+            tipologiaPorEtapaTableBody.innerHTML = bodyHtml || `<tr><td colspan="${allTypologies.length + 2}" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
+        
+        } catch (err) {
+            console.error("Erro na tabela de tipologia por etapa:", err);
+            tipologiaPorEtapaTableBody.innerHTML = `<tr><td colspan="1" style="text-align:center;">Erro ao processar dados.</td></tr>`;
+        }
+    };
+
     const setTheme = (theme) => {
         currentTheme = theme;
         localStorage.setItem('theme', theme);
@@ -372,16 +410,11 @@ document.addEventListener('DOMContentLoaded', () => {
     darkThemeToggle.addEventListener('change', () => setTheme('dark'));
     setTheme(currentTheme);
 
-    sidebarToggle.addEventListener('click', () => {
-        body.classList.toggle('sidebar-collapsed');
-    });
-
-    // --- Lógica de Eventos ---
     form.addEventListener('submit', async e => {
         e.preventDefault();
         if (btnGerar.disabled) return;
         btnGerar.disabled = true; spinner.hidden = false;
-        dashboardContainer.classList.add('hidden');
+        
         try {
             const response = await fetch('/processar', { method: 'POST', body: new FormData(form) });
             const data = await response.json();
@@ -406,16 +439,32 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             createCustomDropdown(originalSelect);
+            
+            uploadContainer.classList.add('hidden');
+            appHeader.classList.remove('hidden');
+            dashboardContent.classList.remove('hidden');
 
             renderDashboard(fullData);
-            dashboardContainer.classList.remove('hidden');
-            setTimeout(() => { dashboardContainer.scrollIntoView({ behavior: 'smooth' }); }, 10);
+            
             showToast("Análise concluída com sucesso!");
         } catch (error) { showToast(error.message, 'error');
         } finally { btnGerar.disabled = false; spinner.hidden = true; }
     });
 
     analiseDetalhadaFilter.addEventListener('change', () => renderAnaliseDetalhadaTable(filteredData));
+
+    tipologiaPorEtapaTableBody.addEventListener('click', (e) => {
+        const summaryRow = e.target.closest('.summary-row');
+        if (summaryRow) {
+            const detailRow = summaryRow.nextElementSibling;
+            const toggleIcon = summaryRow.querySelector('.expand-toggle');
+            
+            if (detailRow && detailRow.classList.contains('detail-row')) {
+                detailRow.classList.toggle('show');
+                toggleIcon.classList.toggle('open');
+            }
+        }
+    });
 
     btnDownloadXlsx.addEventListener('click', async () => {
         if (filteredData.length === 0) { showToast("Gere um dashboard antes de baixar.", 'error'); return; }
@@ -443,11 +492,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const filterText = document.querySelector('.custom-select-trigger').textContent;
         
         pdf.setFontSize(22);
-        pdf.setTextColor('#1a202c');
+        pdf.setTextColor(40, 40, 40);
         pdf.text('Relatório Analítico de Vendas', 40, 60);
 
         pdf.setFontSize(12);
-        pdf.setTextColor('#718096');
+        pdf.setTextColor(100, 100, 100);
         pdf.text(`Filtro Aplicado: ${filterText}`, 40, 80);
         pdf.text(`Data de Geração: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 40, 95);
 
@@ -464,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
             body: kpi_body,
             startY: 140,
             theme: 'grid',
-            headStyles: { fillColor: '#4f46e5' },
+            headStyles: { fillColor: [79, 70, 229] },
             styles: { fontSize: 12, cellPadding: 8 },
             columnStyles: {
                 0: { fontStyle: 'bold' }
@@ -493,63 +542,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const y = 60;
             pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, newWidth, newHeight);
             
-            if (charts.vendas) {
-                pdf.addPage();
-                const title = document.getElementById('vendas-empreendimento-title').textContent;
-                const head = [[]];
-                const body = [];
-                if (charts.vendas.w.config.chart.type === 'donut') {
-                    head[0] = ['Tipo de Venda', 'Quantidade'];
-                    charts.vendas.w.config.labels.forEach((label, i) => body.push([label, charts.vendas.w.config.series[i]]));
-                } else {
-                    head[0] = ['Empreendimento', ...charts.vendas.w.config.series.map(s => s.name)];
-                    charts.vendas.w.config.xaxis.categories.forEach((cat, i) => body.push([cat, ...charts.vendas.w.config.series.map(s => s.data[i])]));
-                }
-                pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text(title, 40, 40) });
-            }
-            if (charts.tipologia) {
-                pdf.addPage();
-                const head = [['Tipologia', 'Total de Unidades']];
-                const body = charts.tipologia.w.config.xaxis.categories.map((cat, i) => [cat, charts.tipologia.w.config.series[0].data[i]]);
-                pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text('Unidades por Tipologia', 40, 40) });
-            }
-            if (charts.vendasEtapa) {
-                pdf.addPage();
-                const head = [['Etapa', 'Unidades Vendidas']];
-                const body = charts.vendasEtapa.w.config.xaxis.categories.map((cat, i) => [cat, charts.vendasEtapa.w.config.series[0].data[i]]);
-                pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text('Vendas por Etapa', 40, 40) });
-            }
-            if (charts.vendasMes) {
-                pdf.addPage();
-                const head = [['Mês/Ano', 'Unidades Vendidas']];
-                const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
-                const vendasData = filteredData.filter(d => SITUACAO_VENDIDO.includes((d.situacao || '').toUpperCase().trim()) && d.dataVenda);
-                const monthlyCounts = vendasData.reduce((acc, item) => {
-                    try {
-                        const parts = item.dataVenda.split('/');
-                        if (parts.length === 3) {
-                            const month = parts[1].padStart(2, '0');
-                            const year = parts[2];
-                            const key = `${year}-${month}`;
-                            acc[key] = (acc[key] || 0) + 1;
-                        }
-                    } catch (e) {}
-                    return acc;
-                }, {});
-                const sortedKeys = Object.keys(monthlyCounts).sort();
-                const body = sortedKeys.map(key => {
-                    const [year, month] = key.split('-');
-                    const formattedDate = `${month}/${year}`;
-                    return [formattedDate, monthlyCounts[key]];
-                });
-
-                pdf.autoTable({ head, body, startY: 60, didDrawPage: data => pdf.text('Vendas por Mês', 40, 40) });
-            }
-
             pdf.addPage();
-            const tableElement = document.getElementById('analise-detalhada-table');
-            pdf.autoTable({ html: tableElement, startY: 60, didDrawPage: data => pdf.text('Análise Detalhada', 40, 40) });
-
+            pdf.autoTable({ html: '#analise-detalhada-table', startY: 60, didDrawPage: data => pdf.text('Análise Detalhada de Status', 40, 40) });
+            
+            pdf.addPage();
+            pdf.autoTable({ 
+                html: '#tipologia-por-etapa-table', 
+                startY: 60, 
+                didDrawPage: data => pdf.text('Análise de Tipologias por Etapa (Resumo)', 40, 40),
+                willDrawCell: (data) => {
+                    if (data.row.raw && data.row.raw.classList.contains('detail-row')) {
+                        return false; 
+                    }
+                }
+            });
 
             pdf.save(`relatorio_analitico_${new Date().toISOString().slice(0,10)}.pdf`);
         }).catch(err => {
@@ -557,7 +563,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("Falha ao gerar o PDF.", "error");
         }).finally(() => {
             dashboardElement.classList.remove('pdf-capture');
-            loadingOverlay.classList.add('hidden');
         });
     });
     
