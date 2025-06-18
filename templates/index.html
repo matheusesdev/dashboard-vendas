@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Vendas</title>
+    
+    <link rel="icon" href="{{ url_for('static', filename='img/logo_vca.png') }}" type="image/png">
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://unpkg.com/jspdf-autotable"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 </head>
@@ -24,7 +23,6 @@
 
     <div id="toast-container"></div>
 
-    <!-- TELA DE UPLOAD INICIAL -->
     <div id="upload-container">
         <div class="upload-box">
             <img src="{{ url_for('static', filename='img/logo_vca.png') }}" alt="VCA Logo" class="upload-logo">
@@ -53,7 +51,6 @@
         </div>
     </div>
     
-    <!-- HEADER DO DASHBOARD -->
     <header id="app-header" class="hidden">
         <div class="header-left">
             <img src="{{ url_for('static', filename='img/logo_vca.png') }}" alt="VCA Logo" class="header-app-logo">
@@ -64,10 +61,7 @@
                 <a id="btnDownloadXlsx" class="nav-item" title="Baixar Planilha (XLSX)">
                     <i class="material-icons">grid_on</i>
                 </a>
-                <a id="btnDownloadPdf" class="nav-item" title="Gerar Relatório (PDF)">
-                    <i class="material-icons">picture_as_pdf</i>
-                </a>
-            </nav>
+                </nav>
             <div class="theme-switcher">
                 <input type="radio" id="light-theme" name="theme" checked>
                 <label for="light-theme" title="Tema Claro"><i class="material-icons">light_mode</i></label>
@@ -78,7 +72,6 @@
         </div>
     </header>
 
-    <!-- Conteúdo Principal do Dashboard -->
     <main id="dashboard-content" class="hidden">
         <section id="dashboard-container">
             <header class="dashboard-header">

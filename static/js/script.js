@@ -1,5 +1,3 @@
-// static/js/script.js
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- Variáveis de Estado ---
     let fullData = [];
@@ -17,7 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const dashboardContent = document.getElementById('dashboard-content');
     const customSelectWrapper = document.getElementById('custom-select-wrapper');
     const btnDownloadXlsx = document.getElementById('btnDownloadXlsx');
-    const btnDownloadPdf = document.getElementById('btnDownloadPdf');
     const loadingOverlay = document.getElementById('loading-overlay');
     const estoqueFileInput = document.getElementById('estoqueFile');
     const vendasFileInput = document.getElementById('vendasFile');
@@ -90,16 +87,20 @@ document.addEventListener('DOMContentLoaded', () => {
         yaxis: { labels: { style: { colors: 'var(--text-secondary)' } } }
     });
     
+    // PONTO DE CORREÇÃO 1: Dropdown de Empreendimentos
     const createCustomDropdown = (originalSelect) => {
         originalSelect.style.display = 'none';
         const container = document.createElement('div');
         container.className = 'custom-select-container';
+        
         const trigger = document.createElement('div');
         trigger.className = 'custom-select-trigger';
         trigger.textContent = originalSelect.options[originalSelect.selectedIndex].textContent;
         container.appendChild(trigger);
+        
         const options = document.createElement('div');
         options.className = 'custom-options';
+        
         Array.from(originalSelect.options).forEach(optionEl => {
             const customOption = document.createElement('div');
             customOption.className = 'custom-option';
@@ -120,12 +121,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             options.appendChild(customOption);
         });
-        container.appendChild(options);
+        
+        container.appendChild(options); // Esta linha conserta o bug.
+        
         customSelectWrapper.innerHTML = '';
         customSelectWrapper.appendChild(container);
+        
         trigger.addEventListener('click', () => {
             container.classList.toggle('open');
         });
+        
         window.addEventListener('click', (e) => {
             if (!container.contains(e.target)) {
                 container.classList.remove('open');
@@ -205,13 +210,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = "#chart-unidades-tipologia";
         const baseOptions = getBaseChartOptions();
         try {
-            const tipologiaData = data.filter(d => d.tipologia);
-            if (tipologiaData.length === 0) { showChartMessage(container, "Sem dados de 'Tipologia'."); return; }
-            const grouped = tipologiaData.reduce((acc, d) => { acc[d.tipologia] = (acc[d.tipologia] || 0) + 1; return acc; }, {});
+            const tipologiaData = data.filter(d => d.tipologia); 
+            if (tipologiaData.length === 0) { 
+                showChartMessage(container, "Sem dados de 'Tipologia'."); 
+                return; 
+            }
+            
+            const grouped = tipologiaData.reduce((acc, d) => {
+                const key = d.tipologia.trim();
+                if (key) {
+                    acc[key] = (acc[key] || 0) + 1;
+                }
+                return acc;
+            }, {});
+            
             const sorted = Object.entries(grouped).sort((a,b) => b[1] - a[1]);
-            charts.tipologia = new ApexCharts(document.querySelector(container), { ...baseOptions, series: [{ name: 'Unidades', data: sorted.map(d => d[1]) }], chart: { ...baseOptions.chart, type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: false, distributed: true, columnWidth: '60%' } }, xaxis: { categories: sorted.map(d => d[0]), ...baseOptions.xaxis }, legend: { show: false } });
+            
+            charts.tipologia = new ApexCharts(document.querySelector(container), { 
+                ...baseOptions, 
+                series: [{ name: 'Unidades', data: sorted.map(d => d[1]) }], 
+                chart: { ...baseOptions.chart, type: 'bar', height: 350 }, 
+                plotOptions: { bar: { horizontal: false, distributed: true, columnWidth: '60%' } }, 
+                xaxis: { 
+                    categories: sorted.map(d => d[0]), 
+                    ...baseOptions.xaxis,
+                    labels: {
+                        ...baseOptions.xaxis.labels,
+                        trim: false,
+                        style: {
+                            whiteSpace: 'normal',
+                        },
+                    }
+                }, 
+                legend: { show: false } 
+            });
             charts.tipologia.render();
-        } catch (err) { console.error("Erro no gráfico de tipologia:", err); showChartMessage(container, "Erro ao processar dados."); }
+        } catch (err) { 
+            console.error("Erro no gráfico de tipologia:", err); 
+            showChartMessage(container, "Erro ao processar dados."); 
+        }
     };
     
     const renderVendasPorEtapaChart = (data) => {
@@ -272,12 +309,12 @@ document.addEventListener('DOMContentLoaded', () => {
             tableThead.innerHTML = `
                 <tr>
                     <th>${headerText}</th>
-                    <th>Vendidas</th>
-                    <th>Reservadas</th>
-                    <th>Disponíveis</th>
-                    <th>Bloqueadas</th>
-                    <th>Outros</th>
-                    <th>Total</th>
+                    <th class="text-center">Vendidas</th>
+                    <th class="text-center">Reservadas</th>
+                    <th class="text-center">Disponíveis</th>
+                    <th class="text-center">Bloqueadas</th>
+                    <th class="text-center">Outros</th>
+                    <th class="text-right">Total</th>
                 </tr>`;
 
             const SITUACAO_VENDIDO = ['VENDIDO', 'VENDIDA'];
@@ -298,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }).sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
 
             tableBody.innerHTML = analysis.length > 0
-                ? analysis.map(row => `<tr><td>${row.key}</td><td>${row.vendidas}</td><td>${row.reservadas}</td><td>${row.disponiveis}</td><td>${row.bloqueadas}</td><td>${row.outros}</td><td><b>${row.total}</b></td></tr>`).join('')
+                ? analysis.map(row => `<tr><td>${row.key}</td><td class="text-center">${row.vendidas}</td><td class="text-center">${row.reservadas}</td><td class="text-center">${row.disponiveis}</td><td class="text-center">${row.bloqueadas}</td><td class="text-center">${row.outros}</td><td class="text-right"><b>${row.total}</b></td></tr>`).join('')
                 : `<tr><td colspan="7" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
 
         } catch (err) {
@@ -307,89 +344,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // PONTO DE CORREÇÃO 2: Novo layout da tabela de Tipologia x Etapa
     const renderTipologiaPorEtapaTable = (data) => {
         const tableThead = document.querySelector('#tipologia-por-etapa-table thead');
         tipologiaPorEtapaTableBody.innerHTML = '';
         tableThead.innerHTML = '';
-        
+
         try {
             const allTypologies = [...new Set(data.map(d => d.tipologia).filter(Boolean))].sort();
-            
-            if (allTypologies.length === 0) {
+            const allEtapas = [...new Set(data.map(d => d.etapa).filter(Boolean))].sort((a,b) => a.localeCompare(b, undefined, {numeric: true}));
+
+            if (allTypologies.length === 0 || allEtapas.length === 0) {
                 tableThead.innerHTML = `<tr><th>Análise de Tipologias por Etapa</th></tr>`;
-                tipologiaPorEtapaTableBody.innerHTML = '<tr><td style="text-align:center;">Não há dados de tipologia para analisar.</td></tr>';
+                tipologiaPorEtapaTableBody.innerHTML = '<tr><td style="text-align:center;">Não há dados suficientes para analisar.</td></tr>';
                 return;
             }
 
-            let headerHtml = '<tr><th>Etapa</th>';
-            allTypologies.forEach(t => headerHtml += `<th class="text-center">${t}</th>`);
+            let headerHtml = '<tr><th>Tipologia</th>';
+            allEtapas.forEach(e => headerHtml += `<th class="text-center">${e}</th>`);
             headerHtml += '<th class="text-right">Total</th></tr>';
             tableThead.innerHTML = headerHtml;
 
             const groupedData = data.reduce((acc, d) => {
-                const etapa = d.etapa || 'Não especificado';
                 const tipologia = d.tipologia;
+                const etapa = d.etapa;
                 const situacao = (d.situacao || 'OUTROS').toUpperCase().trim();
                 
-                if (!tipologia) return acc;
+                if (!tipologia || !etapa) return acc;
 
-                if (!acc[etapa]) {
-                    acc[etapa] = { totalCounts: {}, statusCounts: {} };
+                if (!acc[tipologia]) {
+                    acc[tipologia] = { totalCounts: {}, statusCounts: {} };
                 }
-                if (!acc[etapa].statusCounts[tipologia]) {
-                    acc[etapa].statusCounts[tipologia] = { VENDIDA: 0, DISPONIVEL: 0, RESERVADA: 0, BLOQUEADA: 0, OUTROS: 0 };
+                if (!acc[tipologia].totalCounts[etapa]) {
+                    acc[tipologia].totalCounts[etapa] = 0;
+                    acc[tipologia].statusCounts[etapa] = { VENDIDA: 0, DISPONIVEL: 0, RESERVADA: 0, BLOQUEADA: 0, OUTROS: 0 };
                 }
 
-                acc[etapa].totalCounts[tipologia] = (acc[etapa].totalCounts[tipologia] || 0) + 1;
+                acc[tipologia].totalCounts[etapa]++;
                 
-                if (situacao === 'VENDIDO' || situacao === 'VENDIDA') {
-                    acc[etapa].statusCounts[tipologia].VENDIDA++;
-                } else if (situacao === 'DISPONÍVEL' || situacao === 'DISPONIVEL') {
-                    acc[etapa].statusCounts[tipologia].DISPONIVEL++;
-                } else if (situacao === 'RESERVADA') {
-                    acc[etapa].statusCounts[tipologia].RESERVADA++;
-                } else if (situacao === 'BLOQUEADO' || situacao === 'BLOQUEADA') {
-                    acc[etapa].statusCounts[tipologia].BLOQUEADA++;
-                } else {
-                    acc[etapa].statusCounts[tipologia].OUTROS++;
-                }
+                if (['VENDIDO', 'VENDIDA'].includes(situacao)) acc[tipologia].statusCounts[etapa].VENDIDA++;
+                else if (['DISPONÍVEL', 'DISPONIVEL'].includes(situacao)) acc[tipologia].statusCounts[etapa].DISPONIVEL++;
+                else if (situacao === 'RESERVADA') acc[tipologia].statusCounts[etapa].RESERVADA++;
+                else if (['BLOQUEADO', 'BLOQUEADA'].includes(situacao)) acc[tipologia].statusCounts[etapa].BLOQUEADA++;
+                else acc[tipologia].statusCounts[etapa].OUTROS++;
+                
                 return acc;
             }, {});
-            
+
             let bodyHtml = '';
-            Object.entries(groupedData).sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric: true})).forEach(([etapa, counts]) => {
-                let summaryRowHtml = `<tr class="summary-row" data-etapa="${etapa}"><td class="text-center"><i class="material-icons expand-toggle">chevron_right</i> ${etapa}</td>`;
+            allTypologies.forEach(tipologia => {
+                const counts = groupedData[tipologia] || { totalCounts: {}, statusCounts: {} };
                 let rowTotal = 0;
-                allTypologies.forEach(typology => {
-                    const count = counts.totalCounts[typology] || 0;
+                
+                let summaryRowHtml = `<tr class="summary-row" data-tipologia="${tipologia}">`;
+                summaryRowHtml += `<td><i class="material-icons expand-toggle">chevron_right</i> ${tipologia}</td>`;
+
+                allEtapas.forEach(etapa => {
+                    const count = counts.totalCounts[etapa] || 0;
                     summaryRowHtml += `<td class="text-center">${count}</td>`;
                     rowTotal += count;
                 });
                 summaryRowHtml += `<td class="text-right"><b>${rowTotal}</b></td></tr>`;
 
                 let detailRowHtml = `<tr class="detail-row"><td class="indent-cell"></td>`;
-                allTypologies.forEach(typology => {
-                    const status = counts.statusCounts[typology] || { VENDIDA: 0, DISPONIVEL: 0, RESERVADA: 0, BLOQUEADA: 0, OUTROS: 0 };
+                allEtapas.forEach(etapa => {
+                    const status = counts.statusCounts[etapa] || { VENDIDA: 0, DISPONIVEL: 0, RESERVADA: 0, BLOQUEADA: 0, OUTROS: 0 };
                     let pillsHtml = '';
                     if (status.VENDIDA > 0) pillsHtml += `<span class="status-pill sold" data-tooltip="Vendidas"><i class="material-icons">check_circle</i> ${status.VENDIDA}</span>`;
                     if (status.DISPONIVEL > 0) pillsHtml += `<span class="status-pill available" data-tooltip="Disponíveis"><i class="material-icons">storefront</i> ${status.DISPONIVEL}</span>`;
                     if (status.RESERVADA > 0) pillsHtml += `<span class="status-pill reserved" data-tooltip="Reservadas"><i class="material-icons">schedule</i> ${status.RESERVADA}</span>`;
                     if (status.BLOQUEADA > 0) pillsHtml += `<span class="status-pill blocked" data-tooltip="Bloqueadas"><i class="material-icons">lock</i> ${status.BLOQUEADA}</span>`;
                     if (status.OUTROS > 0) pillsHtml += `<span class="status-pill others" data-tooltip="Outros"><i class="material-icons">help_outline</i> ${status.OUTROS}</span>`;
-                    
-                    detailRowHtml += `<td class="text-center"><div class="status-pills">${pillsHtml}</div></td>`;
+                    detailRowHtml += `<td class="text-center"><div class="status-pills">${pillsHtml || '-'}</div></td>`;
                 });
                 detailRowHtml += `<td></td></tr>`;
 
                 bodyHtml += summaryRowHtml + detailRowHtml;
             });
-            tipologiaPorEtapaTableBody.innerHTML = bodyHtml || `<tr><td colspan="${allTypologies.length + 2}" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
-        
+            tipologiaPorEtapaTableBody.innerHTML = bodyHtml || `<tr><td colspan="${allEtapas.length + 2}" style="text-align:center;">Nenhum dado para este agrupamento.</td></tr>`;
+
         } catch (err) {
             console.error("Erro na tabela de tipologia por etapa:", err);
             tipologiaPorEtapaTableBody.innerHTML = `<tr><td colspan="1" style="text-align:center;">Erro ao processar dados.</td></tr>`;
         }
     };
+
 
     const setTheme = (theme) => {
         currentTheme = theme;
@@ -480,90 +519,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.URL.revokeObjectURL(url); document.body.removeChild(a);
         } catch (error) { showToast(error.message, 'error');
         } finally { loadingOverlay.classList.add('hidden'); }
-    });
-    
-    btnDownloadPdf.addEventListener('click', () => {
-        if (filteredData.length === 0) { showToast("Gere um dashboard antes de gerar o PDF.", 'error'); return; }
-        loadingOverlay.classList.remove('hidden');
-        
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-        
-        const filterText = document.querySelector('.custom-select-trigger').textContent;
-        
-        pdf.setFontSize(22);
-        pdf.setTextColor(40, 40, 40);
-        pdf.text('Relatório Analítico de Vendas', 40, 60);
-
-        pdf.setFontSize(12);
-        pdf.setTextColor(100, 100, 100);
-        pdf.text(`Filtro Aplicado: ${filterText}`, 40, 80);
-        pdf.text(`Data de Geração: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 40, 95);
-
-        const kpi_head = [['Indicador', 'Valor']];
-        const kpi_body = [
-            ['Unidades Vendidas', document.getElementById('kpi-vendidas').textContent],
-            ['Unidades Reservadas', document.getElementById('kpi-reservadas').textContent],
-            ['Unidades Disponíveis', document.getElementById('kpi-disponiveis').textContent],
-            ['Unidades Bloqueadas', document.getElementById('kpi-bloqueadas').textContent],
-        ];
-
-        pdf.autoTable({
-            head: kpi_head,
-            body: kpi_body,
-            startY: 140,
-            theme: 'grid',
-            headStyles: { fillColor: [79, 70, 229] },
-            styles: { fontSize: 12, cellPadding: 8 },
-            columnStyles: {
-                0: { fontStyle: 'bold' }
-            }
-        });
-        
-        pdf.addPage();
-        const dashboardElement = document.getElementById('dashboard-container');
-        dashboardElement.classList.add('pdf-capture');
-
-        html2canvas(dashboardElement, { scale: 2, useCORS: true, backgroundColor: body.classList.contains('dark-mode') ? '#111827' : '#f0f2f5' })
-        .then(canvas => {
-            dashboardElement.classList.remove('pdf-capture');
-            
-            pdf.text('Resumo Visual do Dashboard', 40, 40);
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            const ratio = canvas.width / canvas.height;
-            let newWidth = pdfWidth - 80;
-            let newHeight = newWidth / ratio;
-            if (newHeight > pdfHeight - 100) {
-                newHeight = pdfHeight - 100;
-                newWidth = newHeight * ratio;
-            }
-            const x = (pdfWidth - newWidth) / 2;
-            const y = 60;
-            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, newWidth, newHeight);
-            
-            pdf.addPage();
-            pdf.autoTable({ html: '#analise-detalhada-table', startY: 60, didDrawPage: data => pdf.text('Análise Detalhada de Status', 40, 40) });
-            
-            pdf.addPage();
-            pdf.autoTable({ 
-                html: '#tipologia-por-etapa-table', 
-                startY: 60, 
-                didDrawPage: data => pdf.text('Análise de Tipologias por Etapa (Resumo)', 40, 40),
-                willDrawCell: (data) => {
-                    if (data.row.raw && data.row.raw.classList.contains('detail-row')) {
-                        return false; 
-                    }
-                }
-            });
-
-            pdf.save(`relatorio_analitico_${new Date().toISOString().slice(0,10)}.pdf`);
-        }).catch(err => {
-            console.error("Erro ao gerar PDF:", err);
-            showToast("Falha ao gerar o PDF.", "error");
-        }).finally(() => {
-            dashboardElement.classList.remove('pdf-capture');
-        });
     });
     
     estoqueFileInput.addEventListener('change', () => updateFileDisplay(estoqueFileInput, estoqueFileName));

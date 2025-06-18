@@ -129,8 +129,8 @@ main.hidden, #app-header.hidden, #upload-container.hidden {
     color: var(--primary-color);
 }
 .file-input-group.filled .file-select-button {
-    border-color: var(--accent-color);
-    color: var(--accent-color);
+    border-color: var(--success-color);
+    color: var(--success-color);
     font-weight: 500;
 }
 .btn-generate {
@@ -647,3 +647,5 @@ body.dark-mode .status-pill.blocked {
 body.dark-mode .status-pill.others {
     background-color: rgba(107, 114, 128, 0.2);
 }
+
+/* O bloco de correção para tabelas largas foi removido daqui */
